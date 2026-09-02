@@ -1,0 +1,594 @@
+/**
+ * ฟอร์มบันทึกกิจกรรม — ตัวเดียวรองรับครบทั้ง 26 กิจกรรม
+ * เรนเดอร์จาก ActivitySpec จึงเพิ่ม/แก้ฟิลด์ได้ที่ไฟล์สเปกที่เดียว
+ *
+ * ลำดับการทำงานยึดหลักออฟไลน์มาก่อน
+ *   กรอก → เขียนลง IndexedDB → เข้าคิวส่ง → คำนวณผลต่อเนื่อง → แจ้งผู้ใช้
+ * ไม่มีขั้นตอนไหนรอเครือข่าย
+ */
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
+import { Camera, CircleCheck, TriangleAlert, X } from 'lucide-react'
+import type { ActivitySpec, FieldSpec } from '../domain/activities'
+import type { Animal, BioParams, SemenBatch } from '../domain/types'
+import { Card, Empty, Field, List, Note, PageHeader, Pill, Row, SearchBox } from './ui'
+import { db, newLocalId } from '../data/db'
+import { saveRecord } from '../data/sync'
+import { applyEffects, closeTask } from '../data/effects'
+import { getParams, searchAnimals } from '../data/queries'
+import { breedingBlockers } from '../domain/rules'
+import { compressImage } from '../lib/image'
+import { useAccount } from '../state/session'
+import { bytes } from '../lib/format'
+import { toast } from './Toast'
+
+const localNow = (withTime: boolean) => {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return withTime ? `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}` : date
+}
+
+interface PendingPhoto {
+  id: string
+  blob: Blob
+  url: string
+  bytes: number
+  width: number
+  height: number
+}
+
+export function ActivityForm({ spec }: { spec: ActivitySpec }) {
+  const nav = useNavigate()
+  const [sp] = useSearchParams()
+  const { name, role, readOnly } = useAccount()
+
+  const taskLocalId = sp.get('task')
+  const presetAnimal = sp.get('animal')
+
+  const [values, setValues] = useState<Record<string, unknown>>({})
+  const [animalId, setAnimalId] = useState<string | null>(presetAnimal)
+  const [animal, setAnimal] = useState<Animal | null>(null)
+  const [params, setParams] = useState<BioParams | null>(null)
+  const [semen, setSemen] = useState<SemenBatch[]>([])
+  const [photos, setPhotos] = useState<PendingPhoto[]>([])
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState<{ messages: string[]; tasksCreated: number } | null>(null)
+  const [picking, setPicking] = useState(false)
+  const photosRef = useRef<PendingPhoto[]>([])
+  photosRef.current = photos
+
+  // ตั้งค่าเริ่มต้นของฟิลด์วันที่/เวลาให้เป็นตอนนี้ เพราะภาคสนามบันทึกทันทีที่ทำ
+  useEffect(() => {
+    const init: Record<string, unknown> = {}
+    for (const f of spec.fields) {
+      if (f.type === 'date') init[f.key] = localNow(false)
+      if (f.type === 'datetime') init[f.key] = localNow(true)
+      if (f.type === 'bool') init[f.key] = false
+      if (f.key === 'actor' || f.key === 'reporter') init[f.key] = name
+    }
+    setValues(init)
+    setDone(null)
+    setErrors({})
+  }, [spec.code, name])
+
+  useEffect(() => {
+    void getParams().then(setParams)
+    if (spec.fields.some((f) => f.type === 'semen'))
+      void db.semen.filter((s) => s.status !== 'rejected').toArray().then(setSemen)
+  }, [spec.code])
+
+  useEffect(() => {
+    if (!animalId) return setAnimal(null)
+    void db.animals.get(animalId).then((a) => setAnimal(a ?? null))
+  }, [animalId])
+
+  // คืนหน่วยความจำของ object URL เมื่อออกจากหน้า
+  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), [])
+
+  const set = (k: string, v: unknown) => setValues((prev) => ({ ...prev, [k]: v }))
+
+  const blockers = useMemo(
+    () => (animal && params && spec.code === 'ก-08' ? breedingBlockers(animal, params) : []),
+    [animal, params, spec.code],
+  )
+
+  async function addPhotos(files: FileList | null) {
+    if (!files?.length) return
+    for (const file of Array.from(files)) {
+      try {
+        // บีบอัดก่อนเก็บเสมอ — วัดจริงแล้วรูปจากกล้อง 3 MB เหลือราว 100 KB
+        const { blob, width, height } = await compressImage(file, 1600, 0.8)
+        setPhotos((p) => [
+          ...p,
+          {
+            id: newLocalId('ph'),
+            blob,
+            url: URL.createObjectURL(blob),
+            bytes: blob.size,
+            width,
+            height,
+          },
+        ])
+      } catch {
+        setErrors((e) => ({ ...e, photos: 'เปิดไฟล์รูปไม่สำเร็จ' }))
+      }
+    }
+  }
+
+  function validate(): boolean {
+    const next: Record<string, string> = {}
+    if (spec.needsAnimal && !animalId) next.__animal = 'ต้องเลือกตัวสัตว์ก่อน'
+    for (const f of spec.fields) {
+      if (!f.required) continue
+      const v = values[f.key]
+      if (f.type === 'bool') continue
+      if (v === undefined || v === null || v === '') next[f.key] = 'จำเป็นต้องกรอก'
+    }
+    setErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  async function submit() {
+    if (!validate() || !params) return
+    setSaving(true)
+    try {
+      const localId = newLocalId('rec')
+      const occurredAt = pickOccurredAt(spec, values)
+
+      // เก็บรูปก่อน เพื่อให้บันทึกอ้างถึงได้แม้ปิดแอปทันที
+      const photoIds: number[] = []
+      for (const p of photos) {
+        const id = await db.photos.add({
+          localId: p.id,
+          recordLocalId: localId,
+          blob: p.blob,
+          bytes: p.bytes,
+          width: p.width,
+          height: p.height,
+          at: Date.now(),
+          syncStatus: 'pending',
+        })
+        photoIds.push(id)
+      }
+
+      await saveRecord({
+        localId,
+        serverId: null,
+        activityCode: spec.code,
+        animalId,
+        farmId: animal?.farmId ?? null,
+        occurredAt,
+        payload: values,
+        photoIds,
+        note: String(values.note ?? ''),
+        recordedBy: name,
+        recordedRole: role,
+        lastModified: Date.now(),
+        syncStatus: 'pending',
+        retries: 0,
+      })
+
+      const effects = await applyEffects(spec.code, values, animalId, params, occurredAt)
+      if (taskLocalId) await closeTask(taskLocalId, localId)
+
+      photos.forEach((p) => URL.revokeObjectURL(p.url))
+      setPhotos([])
+      setDone(effects)
+      toast.ok(navigator.onLine ? 'บันทึกแล้ว กำลังส่งขึ้นระบบ' : 'บันทึกลงเครื่องแล้ว จะส่งให้เมื่อมีสัญญาณ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <>
+        <PageHeader title={spec.name} sub={spec.code} />
+        <Card>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <CircleCheck size={22} style={{ color: 'var(--ok)', flex: 'none', marginTop: 2 }} />
+            <div>
+              <h2 style={{ fontSize: 16 }}>บันทึกลงเครื่องแล้ว</h2>
+              <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 3 }}>
+                {spec.code} · {spec.name} — เข้าคิวรอส่งขึ้นเซิร์ฟเวอร์เมื่อมีสัญญาณ
+              </p>
+            </div>
+          </div>
+
+          {done.messages.length > 0 && (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 14 }}>ระบบทำต่อให้แล้ว</p>
+              <ul className="derived">
+                {done.messages.map((m) => (
+                  <li key={m}>{m}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {done.tasksCreated > 0 && (
+            <Note>สร้างกำหนดการถัดไปให้อัตโนมัติ {done.tasksCreated} รายการ ดูได้ที่หน้างาน</Note>
+          )}
+
+          <div className="row">
+            <button className="btn" onClick={() => setDone(null)}>
+              บันทึกอีกรายการ
+            </button>
+            {animalId && (
+              <button className="btn ghost" onClick={() => nav(`/animals/${animalId}`)}>
+                ดูโคตัวนี้
+              </button>
+            )}
+            <button className="btn ghost" onClick={() => nav('/tasks')}>
+              ไปหน้างาน
+            </button>
+          </div>
+        </Card>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <PageHeader title={spec.name} sub={spec.code} />
+      <div className="form-head">
+        <p>{spec.detail}</p>
+        <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
+          ทำเมื่อ: {spec.trigger}
+        </p>
+      </div>
+
+      {spec.needsAnimal && (
+        <Card title="ตัวสัตว์" hint="ยืนยันด้วย RFID หรือเบอร์หู">
+          {animal ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div className="row-title">{animal.tagNo} · {animal.breed}</div>
+                <div className="row-sub">{animal.rfid}</div>
+              </div>
+              <button className="btn ghost" style={{ flex: 'none' }} onClick={() => { setAnimalId(null); setPicking(true) }}>
+                เปลี่ยน
+              </button>
+            </div>
+          ) : (
+            <AnimalPicker onPick={(a) => { setAnimalId(a.id); setPicking(false) }} open={picking || !animalId} />
+          )}
+          {errors.__animal && <p style={{ color: 'var(--crit)', fontSize: 13, marginTop: 8 }}>{errors.__animal}</p>}
+        </Card>
+      )}
+
+      {blockers.length > 0 && (
+        <Card title="เตือนก่อนบันทึกการผสม">
+          <div style={{ display: 'flex', gap: 9 }}>
+            <TriangleAlert size={19} style={{ color: 'var(--warn)', flex: 'none', marginTop: 2 }} />
+            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13.5 }}>
+              {blockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          </div>
+          <Note>ยังบันทึกต่อได้ถ้าหน้างานมีเหตุจำเป็น แต่ระบบจะทำเครื่องหมายไว้ให้ตรวจสอบภายหลัง</Note>
+        </Card>
+      )}
+
+      {spec.fields.length > 0 ? (
+        <Card title="รายละเอียดที่ต้องบันทึก">
+          {spec.fields.map((f) => (
+            <FieldInput
+              key={f.key}
+              field={f}
+              value={values[f.key]}
+              error={errors[f.key]}
+              semen={semen}
+              photos={photos}
+              onChange={(v) => set(f.key, v)}
+              onAddPhotos={addPhotos}
+              onRemovePhoto={(id) => {
+                setPhotos((p) => {
+                  const target = p.find((x) => x.id === id)
+                  if (target) URL.revokeObjectURL(target.url)
+                  return p.filter((x) => x.id !== id)
+                })
+              }}
+            />
+          ))}
+          <Field label="หมายเหตุเพิ่มเติม">
+            <textarea
+              rows={2}
+              value={String(values.note ?? '')}
+              onChange={(e) => set('note', e.target.value)}
+              style={{
+                width: '100%',
+                borderRadius: 11,
+                border: '1px solid var(--rule)',
+                background: 'var(--panel)',
+                color: 'var(--ink)',
+                padding: '8px 12px',
+                font: 'inherit',
+              }}
+            />
+          </Field>
+        </Card>
+      ) : (
+        <Card title="กิจกรรมนี้ระบบทำให้อัตโนมัติ">
+          <Empty>
+            ไม่ต้องกรอกอะไร — ระบบคำนวณและดำเนินการเองเมื่อมีเหตุการณ์ตั้งต้น
+          </Empty>
+        </Card>
+      )}
+
+      <Card title="ระบบจะทำอะไรต่อ">
+        <ul className="derived">
+          {spec.derived.map((d) => (
+            <li key={d}>{d}</li>
+          ))}
+        </ul>
+      </Card>
+
+      {spec.fields.length > 0 && readOnly && (
+        <Card>
+          <Empty>บัญชีนี้มีสิทธิ์ดูอย่างเดียว จึงบันทึกกิจกรรมนี้ไม่ได้</Empty>
+        </Card>
+      )}
+
+      {spec.fields.length > 0 && !readOnly && (
+        <div className="sticky-save">
+          <button className="btn" style={{ width: '100%' }} onClick={() => void submit()} disabled={saving}>
+            {saving ? 'กำลังบันทึก…' : 'บันทึก'}
+          </button>
+          <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 6 }}>
+            บันทึกได้แม้ไม่มีสัญญาณ ระบบจะส่งขึ้นให้เองเมื่อกลับมาออนไลน์
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
+
+function pickOccurredAt(spec: ActivitySpec, values: Record<string, unknown>): number {
+  const dateField = spec.fields.find((f) => f.type === 'datetime') ?? spec.fields.find((f) => f.type === 'date')
+  if (dateField) {
+    const raw = values[dateField.key]
+    if (typeof raw === 'string' && raw) {
+      const t = Date.parse(raw)
+      if (!Number.isNaN(t)) return t
+    }
+  }
+  return Date.now()
+}
+
+function FieldInput({
+  field: f,
+  value,
+  error,
+  semen,
+  photos,
+  onChange,
+  onAddPhotos,
+  onRemovePhoto,
+}: {
+  field: FieldSpec
+  value: unknown
+  error?: string
+  semen: SemenBatch[]
+  photos: PendingPhoto[]
+  onChange: (v: unknown) => void
+  onAddPhotos: (files: FileList | null) => void
+  onRemovePhoto: (id: string) => void
+}) {
+  const label = f.required ? `${f.label} *` : f.label
+  const hint = f.unit ? f.unit : undefined
+
+  if (f.type === 'photo') {
+    return (
+      <Field label={f.label} hint="บีบอัดอัตโนมัติก่อนเก็บ">
+        <label
+          className="btn ghost"
+          style={{ display: 'flex', cursor: 'pointer', width: '100%', justifyContent: 'center' }}
+        >
+          <Camera size={17} /> ถ่ายหรือเลือกรูป
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            hidden
+            onChange={(e) => onAddPhotos(e.target.files)}
+          />
+        </label>
+        {photos.length > 0 && (
+          <div className="thumbs">
+            {photos.map((p) => (
+              <div key={p.id} style={{ position: 'relative' }}>
+                <img src={p.url} alt="" />
+                <button
+                  type="button"
+                  onClick={() => onRemovePhoto(p.id)}
+                  aria-label="ลบรูป"
+                  style={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 4,
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    border: 0,
+                    background: 'rgba(0,0,0,.6)',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {photos.length > 0 && (
+          <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+            {photos.length} รูป · รวม {bytes(photos.reduce((s, p) => s + p.bytes, 0))}
+          </p>
+        )}
+      </Field>
+    )
+  }
+
+  if (f.type === 'bool') {
+    return (
+      <label
+        className="field"
+        style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, cursor: 'pointer' }}
+      >
+        <input
+          type="checkbox"
+          checked={value === true}
+          onChange={(e) => onChange(e.target.checked)}
+          style={{ width: 20, height: 20, flex: 'none', accentColor: 'var(--brand)' }}
+        />
+        <span style={{ margin: 0, color: 'var(--ink)', fontSize: 14 }}>{f.label}</span>
+      </label>
+    )
+  }
+
+  if (f.type === 'score') {
+    const max = f.max ?? 9
+    const min = f.min ?? 1
+    const nums = Array.from({ length: max - min + 1 }, (_, i) => min + i)
+    return (
+      <Field label={label} hint={`สเกล ${min}–${max}`}>
+        <div className="chips" style={{ marginTop: 0 }}>
+          {nums.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className="chip"
+              aria-pressed={Number(value) === n}
+              onClick={() => onChange(n)}
+              style={{ minWidth: 42, justifyContent: 'center' }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        {error && <ErrorText msg={error} />}
+      </Field>
+    )
+  }
+
+  if (f.type === 'select') {
+    return (
+      <Field label={label} hint={hint}>
+        <select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
+          <option value="">— เลือก —</option>
+          {(f.options ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        {error && <ErrorText msg={error} />}
+      </Field>
+    )
+  }
+
+  if (f.type === 'semen') {
+    return (
+      <Field label={label} hint="เฉพาะล็อตที่ยังใช้ได้">
+        <select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
+          <option value="">— เลือกล็อต —</option>
+          {semen.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.lotNo} · {s.sireName} · เหลือ {s.strawsIn - s.strawsUsed} หลอด
+              {s.status === 'watch' ? ' (เฝ้าระวัง)' : ''}
+            </option>
+          ))}
+        </select>
+        {error && <ErrorText msg={error} />}
+      </Field>
+    )
+  }
+
+  if (f.type === 'textarea') {
+    return (
+      <Field label={label}>
+        <textarea
+          rows={3}
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            width: '100%',
+            borderRadius: 11,
+            border: '1px solid var(--rule)',
+            background: 'var(--panel)',
+            color: 'var(--ink)',
+            padding: '8px 12px',
+            font: 'inherit',
+          }}
+        />
+        {error && <ErrorText msg={error} />}
+      </Field>
+    )
+  }
+
+  const inputType =
+    f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'datetime' ? 'datetime-local' : 'text'
+
+  return (
+    <Field label={label} hint={hint}>
+      <input
+        type={inputType}
+        value={String(value ?? '')}
+        min={f.min}
+        max={f.max}
+        step={f.step}
+        inputMode={f.type === 'number' ? 'decimal' : undefined}
+        onChange={(e) => onChange(f.type === 'number' ? e.target.valueAsNumber : e.target.value)}
+      />
+      {error && <ErrorText msg={error} />}
+    </Field>
+  )
+}
+
+function ErrorText({ msg }: { msg: string }) {
+  return <span style={{ color: 'var(--crit)', fontSize: 12.5, display: 'block', marginTop: 4 }}>{msg}</span>
+}
+
+function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; open: boolean }) {
+  const [q, setQ] = useState('')
+  const [rows, setRows] = useState<Animal[]>([])
+
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    void searchAnimals({ q, limit: 25 }).then((r) => alive && setRows(r))
+    return () => {
+      alive = false
+    }
+  }, [q, open])
+
+  return (
+    <>
+      <SearchBox value={q} onChange={setQ} placeholder="สแกนหรือพิมพ์ RFID / เบอร์หู" />
+      {q.trim() === '' ? (
+        <Empty>สแกนแท็กที่ตัวสัตว์ หรือพิมพ์เลขบางส่วนเพื่อค้นหา</Empty>
+      ) : rows.length === 0 ? (
+        <Empty>ไม่พบตัวที่ค้นหา</Empty>
+      ) : (
+        <List>
+          {rows.slice(0, 6).map((a) => (
+            <Row
+              key={a.id}
+              onClick={() => onPick(a)}
+              badge={<Pill tone="mute">{a.tagNo}</Pill>}
+              title={`${a.breed} ${a.bloodPct}%`}
+              sub={a.rfid}
+            />
+          ))}
+        </List>
+      )}
+    </>
+  )
+}

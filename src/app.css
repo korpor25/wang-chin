@@ -1,0 +1,821 @@
+/* สไตล์ของตัวแอปจริง ต่อยอดจากโทเคนใน index.css */
+
+/* ── โครงหน้าจอ ── */
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+}
+
+.shell-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--paper) 93%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--hair);
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+}
+
+.shell-head-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.shell-head img {
+  width: 30px;
+  height: 30px;
+}
+
+.shell-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.shell-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.shell-body {
+  flex: 1;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 14px calc(84px + env(safe-area-inset-bottom));
+}
+
+/* ── แถบเมนูล่าง (มือถือ) ── */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  background: color-mix(in srgb, var(--card) 96%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--hair);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+
+.tabbar a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 2px;
+  border-radius: 10px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 10.5px;
+  position: relative;
+}
+
+.tabbar a.on {
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.tabbar svg {
+  width: 21px;
+  height: 21px;
+}
+
+.tabbar .dot {
+  position: absolute;
+  top: 2px;
+  right: 50%;
+  transform: translateX(15px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--crit);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  font-weight: 700;
+}
+
+@media (min-width: 860px) {
+  .tabbar {
+    position: sticky;
+    top: 0;
+    border-top: 0;
+    border-bottom: 1px solid var(--hair);
+    padding: 6px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .tabbar a {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .tabbar .dot {
+    position: static;
+    transform: none;
+  }
+}
+
+/* ── แถบสถานะออฟไลน์/ซิงค์ ── */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  margin-top: 10px;
+  border: 1px solid transparent;
+}
+
+.statusbar.offline {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 32%, transparent);
+}
+
+.statusbar.online {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 25%, transparent);
+}
+
+.statusbar button {
+  margin-left: auto;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ── รายการทั่วไป ── */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list > li {
+  border-top: 1px solid var(--hair);
+}
+
+.list > li:first-child {
+  border-top: 0;
+}
+
+.row-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 2px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-title {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 14.5px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.row-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 1px;
+  overflow-wrap: anywhere;
+}
+
+.row-side {
+  flex: none;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.chev {
+  flex: none;
+  color: var(--faint);
+}
+
+/* ── ป้ายรหัสกิจกรรม ── */
+.code {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  flex: none;
+}
+
+/* ── หัวข้อกลุ่ม ── */
+.group-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin: 18px 0 2px;
+  padding: 0 2px;
+}
+
+/* ── ช่องค้นหา ── */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 11px;
+  padding: 0 12px;
+  margin-top: 12px;
+}
+
+.search input {
+  flex: 1;
+  border: 0;
+  background: none;
+  min-height: 44px;
+  font: inherit;
+  color: var(--ink);
+  outline: none;
+}
+
+.search svg {
+  color: var(--faint);
+  flex: none;
+}
+
+/* ── ตัวกรองแบบชิป ── */
+.chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-top: 10px;
+  padding-bottom: 2px;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+  font-weight: 600;
+}
+
+/* ── ไทม์ไลน์ ── */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 20px;
+  position: relative;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--hair);
+}
+
+.timeline > li {
+  position: relative;
+  padding: 9px 0;
+}
+
+.timeline > li::before {
+  content: "";
+  position: absolute;
+  left: -19px;
+  top: 16px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--brand);
+  border: 2px solid var(--card);
+}
+
+/* ── กราฟแท่งเล็ก ── */
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 54px;
+  margin-top: 10px;
+}
+
+.spark i {
+  flex: 1;
+  background: var(--brand-soft);
+  border-radius: 3px 3px 0 0;
+  min-height: 3px;
+  position: relative;
+}
+
+.spark i.warn {
+  background: var(--warn-bg);
+  border-top: 2px solid var(--warn);
+}
+
+.spark i.crit {
+  background: var(--crit-bg);
+  border-top: 2px solid var(--crit);
+}
+
+/* ── KPI ── */
+.kpi {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 11px 13px;
+}
+
+.kpi .lab {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.kpi .val {
+  font-size: 23px;
+  font-weight: 800;
+  color: var(--ink);
+  font-family: var(--mono);
+  line-height: 1.2;
+}
+
+.kpi .val small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  font-family: var(--sans);
+}
+
+.kpi .tgt {
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+.kpi .tgt.good {
+  color: var(--ok);
+}
+
+.kpi .tgt.bad {
+  color: var(--crit);
+}
+
+/* ── ฟอร์มกิจกรรม ── */
+.form-head {
+  background: var(--brand-soft);
+  border-radius: 14px;
+  padding: 13px 15px;
+  margin-top: 12px;
+}
+
+.form-head h2 {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.form-head p {
+  font-size: 13px;
+  color: var(--body);
+  margin-top: 6px;
+}
+
+.derived {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.derived li {
+  padding-left: 16px;
+  position: relative;
+  margin-top: 3px;
+}
+
+.derived li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--brand);
+}
+
+.sticky-save {
+  position: sticky;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  margin: 16px -14px 0;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  background: var(--paper);
+  border-top: 1px solid var(--hair);
+}
+
+@media (min-width: 860px) {
+  .sticky-save {
+    bottom: 0;
+    margin: 16px 0 0;
+    padding: 12px 0;
+    border-radius: 0 0 14px 14px;
+  }
+}
+
+@media (min-width: 860px) {
+  .sticky-save {
+    bottom: 12px;
+  }
+}
+
+/* ── ตารางแบบเลื่อนแนวนอน ── */
+.tablewrap {
+  overflow-x: auto;
+  margin-top: 12px;
+  border-radius: 11px;
+  border: 1px solid var(--hair);
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 520px;
+}
+
+table.data th,
+table.data td {
+  padding: 8px 11px;
+  text-align: left;
+  border-bottom: 1px solid var(--hair);
+  white-space: nowrap;
+}
+
+table.data th {
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+table.data tr:last-child td {
+  border-bottom: 0;
+}
+
+table.data td.num {
+  font-family: var(--mono);
+  text-align: right;
+}
+
+/* ── สถานะว่าง ── */
+.empty {
+  text-align: center;
+  padding: 30px 16px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+/* ── ปุ่มบัญชีผู้ใช้บนหัวแอป ── */
+.avatar {
+  margin-left: auto;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(8, 20, 13, 0.38);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+}
+
+@media (min-width: 640px) {
+  .sheet-backdrop {
+    align-items: center;
+    padding: 20px;
+  }
+}
+
+.sheet {
+  width: 100%;
+  max-width: 460px;
+  background: var(--card);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: var(--s2);
+  text-align: left;
+}
+
+@media (min-width: 640px) {
+  .sheet {
+    border-radius: 18px;
+  }
+}
+
+.sheet h2 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.sheet .sheet-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+/* ── หัวหน้าเพจ พร้อมปุ่มย้อนกลับ ── */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0 2px;
+}
+
+.page-head button {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.page-head h1 {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.page-head p {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* ── โครงร่างระหว่างโหลด ── */
+.skeleton {
+  background: var(--card);
+  border: 1px solid var(--hair);
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.sk {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--sunk) 25%, var(--panel) 37%, var(--sunk) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.3s ease infinite;
+  margin-top: 10px;
+}
+
+.sk:first-child {
+  margin-top: 0;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -135% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk {
+    animation: none;
+  }
+}
+
+/* ── แจ้งผลการทำงาน ── */
+.toasts {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(440px, calc(100vw - 28px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13.5px;
+  box-shadow: var(--s2);
+  animation: rise 0.22s ease;
+}
+
+.toast.ok {
+  background: var(--brand-2);
+  color: #fff;
+}
+
+.toast.crit {
+  background: var(--crit);
+  color: #fff;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ── แถบชวนติดตั้งแอป ── */
+.install {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  font-size: 13px;
+  color: var(--brand-2);
+}
+
+.install button {
+  margin-left: auto;
+  flex: none;
+  border: 0;
+  background: var(--brand);
+  color: var(--on-brand);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.install .x {
+  background: none;
+  color: var(--muted);
+  margin-left: 0;
+  padding: 4px;
+}
+
+/* ── หน้าเข้าสู่ระบบ ── */
+.login {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 24px 18px calc(24px + env(safe-area-inset-bottom));
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.login-brand img {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 12px;
+  display: block;
+}
+
+.login-brand h1 {
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.login-brand p {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.login-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--card);
+  border: 1px solid var(--hair);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.login-list li + li {
+  border-top: 1px solid var(--hair);
+}
+
+.login-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.login-list .who {
+  flex: 1;
+  min-width: 0;
+}
+
+.login-list .who b {
+  display: block;
+  font-size: 15px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.login-list .who span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.login-foot {
+  text-align: center;
+  font-size: 12px;
+  color: var(--faint);
+  margin-top: 18px;
+  line-height: 1.7;
+}
