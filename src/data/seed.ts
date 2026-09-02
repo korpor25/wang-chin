@@ -34,7 +34,38 @@ const SIRES = [
 
 const pick = <T>(arr: T[], i: number) => arr[i % arr.length]
 
-export async function seedIfEmpty(force = false) {
+/**
+ * ป้องกันการ seed ซ้อน
+ *
+ * seed() เช็คว่าฐานว่างก่อนแล้วค่อยเขียน ระหว่างสอง step นั้น await คั่นอยู่
+ * ผู้เรียกรายที่สองจึงแทรกเข้ามาเห็นฐานว่างได้เหมือนกัน แล้วเขียนซ้อนจนชน
+ * primary key เป็น BulkError
+ *
+ * เกิดจริงทุกครั้งที่เปิดแอปครั้งแรกตอน dev เพราะ StrictMode รัน effect ซ้ำสองรอบ
+ * แต่เป็นการแข่งกันเขียนที่เกิดได้เสมอ ไม่ใช่เรื่องเฉพาะ StrictMode
+ * จึงกันที่ตัวฟังก์ชัน ไม่ใช่ที่ผู้เรียก
+ */
+let inFlight: Promise<boolean> | null = null
+
+export function seedIfEmpty(force = false): Promise<boolean> {
+  // ผู้เรียกธรรมดาที่มาระหว่างรอบที่วิ่งอยู่ ใช้ผลของรอบนั้นร่วมกันได้
+  if (inFlight && !force) return inFlight
+
+  // ส่วน force คือปุ่ม "สร้างข้อมูลใหม่" ในหน้าตั้งค่า ต้องได้ล้างและเขียนจริงเสมอ
+  // จึงต่อท้ายรอบที่ค้างอยู่แทนการรับผลของรอบนั้นมา ไม่งั้นผู้ใช้กดแล้วเงียบ
+  const prev = inFlight ?? Promise.resolve(false)
+  const run = prev.then(
+    () => seed(force),
+    () => seed(force),
+  )
+  inFlight = run
+  void run.finally(() => {
+    if (inFlight === run) inFlight = null
+  })
+  return run
+}
+
+async function seed(force = false) {
   const count = await db.farms.count()
   if (count > 0 && !force) return false
   if (force) {
