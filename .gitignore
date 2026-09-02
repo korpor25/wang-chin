@@ -25,6 +25,8 @@ dist-ssr
 
 .vercel
 .env*
+# ยกเว้นไฟล์ตัวอย่าง — บอกว่าต้องตั้งตัวแปรอะไรบ้าง ไม่ใส่ค่าจริง
+!.env.example
 
 # build artifacts
 dev-dist
