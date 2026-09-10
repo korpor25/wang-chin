@@ -637,6 +637,7 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<Animal[]>([])
   const [recent, setRecent] = useState<Animal[]>([])
+  const [focused, setFocused] = useState(false)
   // เกษตรกรเลือกได้เฉพาะโคในฟาร์มตัวเอง ยังไม่รู้ขอบเขตก็ยังไม่ต้องคิวรี
   const [scope, setScope] = useState<string[] | null>(role === 'farmer' ? null : [])
 
@@ -652,7 +653,7 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
   useEffect(() => {
     if (!open || !scope) return
     let alive = true
-    void recentAnimals(6, scope).then((r) => alive && setRecent(r))
+    void recentAnimals(4, scope).then((r) => alive && setRecent(r))
     return () => {
       alive = false
     }
@@ -670,20 +671,26 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
   }, [q, open, scope])
 
   const searching = q.trim() !== ''
-  const rows = searching ? hits.slice(0, 8) : recent
+  const rows = searching ? hits.slice(0, 6) : recent
 
   return (
     <>
-      <SearchBox value={q} onChange={setQ} placeholder="สแกนหรือพิมพ์ RFID / เบอร์หู" />
-      {rows.length === 0 ? (
+      <SearchBox
+        value={q}
+        onChange={setQ}
+        placeholder="สแกนหรือพิมพ์ RFID / เบอร์หู"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      {!focused && !searching ? (
+        <p className="picker-hint">แตะช่องค้นหาเพื่อเลือกจากตัวที่เพิ่งบันทึก</p>
+      ) : rows.length === 0 ? (
         <Empty>{searching ? 'ไม่พบตัวที่ค้นหา' : 'ยังไม่มีโคในความดูแล'}</Empty>
       ) : (
         <>
-          <p className="picker-head">
-            {searching ? `พบ ${hits.length} ตัว` : 'บันทึกล่าสุด'}
-            {!searching && <span>แตะเพื่อเลือก หรือสแกนแท็กที่ตัวสัตว์</span>}
-          </p>
-          <ul className="picker-list">
+          <p className="picker-head">{searching ? `พบ ${hits.length} ตัว` : 'บันทึกล่าสุด'}</p>
+          {/* กันไม่ให้ช่องค้นหาหลุดโฟกัสตอนแตะรายการ ไม่งั้นรายการหุบก่อนที่ click จะทำงาน */}
+          <ul className="picker-list" onPointerDown={(e) => e.preventDefault()}>
             {rows.map((a) => (
               <li key={a.id}>
                 <button type="button" className="picker-item" onClick={() => onPick(a)}>

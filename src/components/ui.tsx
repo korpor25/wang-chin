@@ -181,10 +181,14 @@ export function SearchBox({
   value,
   onChange,
   placeholder,
+  onFocus,
+  onBlur,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder: string
+  onFocus?: () => void
+  onBlur?: () => void
 }) {
   return (
     <div className="search">
@@ -194,6 +198,8 @@ export function SearchBox({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         inputMode="search"
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
     </div>
   )

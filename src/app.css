@@ -1062,20 +1062,20 @@ table.data td.num {
 }
 
 /* ── รายการเลือกตัวโค ── */
+.picker-hint,
 .picker-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin: var(--sp-5) 0 var(--sp-2);
+  margin: var(--sp-4) 0 var(--sp-2);
   font-size: var(--fs-xs);
-  font-weight: var(--fw-medium);
   color: var(--muted);
 }
 
-.picker-head span {
-  font-weight: var(--fw-normal);
+.picker-hint {
+  margin-bottom: 0;
   color: var(--faint);
+}
+
+.picker-head {
+  font-weight: var(--fw-medium);
 }
 
 .picker-list {
@@ -1084,6 +1084,9 @@ table.data td.num {
   padding: 0;
   display: grid;
   gap: var(--sp-2);
+  /* กันไม่ให้ผลค้นหายาวจนดันเนื้อหาที่เหลือตกจอ เลยจุดนี้ให้เลื่อนในตัวเอง */
+  max-height: 232px;
+  overflow-y: auto;
 }
 
 .picker-item {
