@@ -1669,40 +1669,94 @@ table.data td.num {
 }
 
 /* ── ตารางคะแนน BCS ──
-   ดีไซน์วางเป็นช่องเรียงเดียว 9 ช่อง แต่คำกำกับไทยยาวเกินกว่าจะยัดลงช่องกว้าง 38px
-   จึงเหลือแต่ตัวเลขในช่อง แล้วยกคำอธิบายของคะแนนที่เลือกมาแสดงเด่น ๆ ใต้ตาราง
-   ผู้ใช้ยังรู้ว่าแต่ละโซนแปลว่าอะไรจากแถบกลุ่มสีใต้ลงไป */
-.score-grid {
+   เดิมเรียง 9 ช่องในแถวเดียว ปุ่มจึงกว้างแค่ราว 34px บนมือถือ ผู้สูงอายุกดพลาดบ่อย
+   ตอนนี้แตกเป็น 3 แถวตามกลุ่มคะแนน แถวละ 3 ปุ่ม ปุ่มกว้างขึ้นเกือบสามเท่า
+   กดถนัดขึ้นและมีที่พอให้ใส่คำกำกับไทยลงในปุ่มได้เลย ไม่ต้องมีแถบกลุ่มสีแยกอีก */
+.score-bands {
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: var(--sp-1);
+  gap: var(--sp-3);
   margin-top: var(--sp-3);
 }
 
-.score-grid.five {
-  grid-template-columns: repeat(5, 1fr);
+/* หัวแถวบอกว่ากลุ่มนี้คือคะแนนอะไรถึงอะไร แทนแถบกลุ่มสีที่เคยอยู่ใต้ตาราง */
+.score-band-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-1);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+}
+
+.score-band-head .rg {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  opacity: 0.8;
+}
+
+.score-band.thin .score-band-head {
+  color: var(--crit);
+}
+
+.score-band.ideal .score-band-head {
+  color: var(--ok);
+}
+
+.score-band.fat .score-band-head {
+  color: var(--info);
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--sp-2);
 }
 
+.score-grid.five {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
 .score-box {
-  aspect-ratio: 1 / 1;
+  /* ปุ่มสูงพอให้นิ้วโป้งกดได้ทั้งปุ่ม ไม่ต้องเล็งกลางช่อง */
+  min-height: 76px;
   /* ปล่อยให้ย่อตามความกว้างที่เหลือจริง จอแคบจะได้ไม่ดันตารางล้นออกนอกการ์ด */
   min-width: 0;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  border-radius: var(--r-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--sp-2) 3px;
+  border-radius: var(--r-md);
   border: 1px solid var(--rule);
   background: var(--card);
   cursor: pointer;
-  font-family: var(--mono);
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-bold);
   color: var(--muted);
   -webkit-tap-highlight-color: transparent;
   transition:
     transform 0.14s ease,
     box-shadow 0.14s ease;
+}
+
+.score-box .num {
+  font-family: var(--mono);
+  font-size: var(--fs-4xl);
+  font-weight: var(--fw-black);
+  line-height: 1;
+}
+
+.score-box .lab {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  text-align: center;
+}
+
+.score-grid.five .score-box {
+  min-height: 64px;
 }
 
 .score-box:active {
@@ -1840,45 +1894,6 @@ table.data td.num {
   border-color: var(--hair);
   font-size: var(--fs-sm);
   justify-content: center;
-}
-
-/* แถบอธิบายกลุ่มคะแนน
-   หลอดแบนยาวแนวนอน แบ่งสามช่วงกว้างเท่ากัน วางใต้ตาราง 9 ช่องพอดี
-   ตำแหน่งจึงบอกเองว่ากลุ่มไหนคือเลขอะไร ไม่ต้องเขียนกำกับให้รก
-
-   พื้นใช้สีอ่อนแล้วเขียนด้วยสีเข้ม ไม่ใช่ตัวขาวบนพื้นสีทึบ
-   เพราะตัวขาวบนพื้นเขียวได้คอนทราสต์แค่ราว 3:1 อ่านยากกลางแดด
-   แบบนี้ได้เกิน 10:1 ทุกช่วง และยังแยกกลุ่มด้วยสีได้เหมือนเดิม */
-.band-legend {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
-  margin-top: var(--sp-3);
-  border-radius: var(--r-pill);
-  overflow: hidden;
-}
-
-.band-seg {
-  padding: var(--sp-1) var(--sp-2);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
-  text-align: center;
-  line-height: 1.4;
-}
-
-.band-seg.thin {
-  background: var(--crit-bg);
-  color: var(--crit);
-}
-
-.band-seg.ideal {
-  background: var(--ok-bg);
-  color: var(--ok);
-}
-
-.band-seg.fat {
-  background: var(--info-bg);
-  color: var(--info);
 }
 
 /* ── กล่องอธิบายคะแนนที่เลือก ── */
@@ -2346,15 +2361,16 @@ a.statusbar {
 /* โหมดมืด — ไล่สีต้องกลับทิศเล็กน้อย ไม่งั้นขอบบนสว่างจนดูลอยเกินจริง */
 
 
-/* จอแคบมาก (ราว 320px) ช่องคะแนนเหลือกว้างแค่ 24px
-   ลดช่องไฟกับขนาดตัวเลขลง ตัวเลขจะได้ไม่ชนขอบช่อง */
+/* จอแคบมาก (ราว 320px) ปุ่มคะแนนเหลือกว้างราว 90px
+   ย่อคำกำกับลงหน่อยไม่ให้ตกบรรทัดที่สาม แต่คงขนาดปุ่มกับตัวเลขไว้เท่าเดิม */
 @media (max-width: 380px) {
-  .score-grid {
-    gap: 3px;
+  .score-row,
+  .score-grid.five {
+    gap: var(--sp-1);
   }
 
-  .score-box {
-    font-size: var(--fs-md);
+  .score-box .lab {
+    font-size: var(--fs-xxs);
   }
 }
 
