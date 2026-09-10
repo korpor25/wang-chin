@@ -21,7 +21,6 @@ import { BAND_CHECKS, BAND_LABEL, BAND_RANGE, BCS9_LABEL, bcsAdvice, bcsBand } f
 import { compressImage } from '../lib/image'
 import { useAccount } from '../state/session'
 import { bytes } from '../lib/format'
-import { CowModel } from './CowModel'
 import { toast } from './Toast'
 
 const localNow = (withTime: boolean) => {
@@ -331,7 +330,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
       )}
 
       {spec.code === 'ก-03' && params && Number(values.score) > 0 && (
-        <BcsPanel score={Number(values.score)} params={params} label={animal?.tagNo ?? ''} />
+        <BcsPanel score={Number(values.score)} params={params} />
       )}
 
       <Card title="ระบบจะทำอะไรต่อ">
@@ -364,21 +363,12 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
  * แผงอธิบายคะแนน BCS ที่เลือก — บอกว่าคะแนนนี้อยู่กลุ่มไหน คลำอะไรได้บ้าง
  * และระบบแนะนำอะไรต่อ คำแนะนำเทียบกับเกณฑ์เข้าผสมใน BioParams ไม่ใช่เลขตายตัว
  */
-function BcsPanel({
-  score,
-  params,
-  label,
-}: {
-  score: number
-  params: BioParams
-  label: string
-}) {
+function BcsPanel({ score, params }: { score: number; params: BioParams }) {
   const band = bcsBand(score)
   const advice = bcsAdvice(score, params)
   return (
     <Card>
       <div className="band-card">
-        <CowModel label={label} />
         <h3>
           BCS {score.toFixed(1)} · กลุ่ม{BAND_LABEL[band]}
         </h3>

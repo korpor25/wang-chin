@@ -1851,10 +1851,6 @@ table.data td.num {
   text-align: center;
 }
 
-.band-card .model-box {
-  margin-top: 0;
-}
-
 .band-card h3 {
   font-size: var(--fs-base);
   margin-top: var(--sp-3);
