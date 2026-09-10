@@ -73,6 +73,9 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
     [spec, role],
   )
 
+  /** ที่แสดงจริงในฟอร์ม — ฟิลด์ซ่อนยังถูกบันทึกไปด้วย แค่ไม่ให้กรอก */
+  const shown = useMemo(() => fields.filter((f) => !f.hidden), [fields])
+
   // ตั้งค่าเริ่มต้นของฟิลด์วันที่/เวลาให้เป็นตอนนี้ เพราะภาคสนามบันทึกทันทีที่ทำ
   useEffect(() => {
     const init: Record<string, unknown> = {}
@@ -111,15 +114,9 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
 
   /**
    * มติ [29:56] — BCS ของโคเนื้อคือสเกล 9 ระดับ (mockup ของทีมออกแบบเป็น 5)
-   * ค่าสูงสุดจึงมาจาก BioParams ไม่ใช่ตัวเลขในหน้าจอ
-   * ยกเว้นผู้ใช้เลือกสเกลโคนมเอง ซึ่งกำกับไว้ในชื่อของตัวเลือกอยู่แล้ว
+   * ค่าสูงสุดมาจาก BioParams ที่เดียว ไม่ใช่ตัวเลขที่ฝังไว้ในหน้าจอ
    */
-  const scoreMax = useMemo(() => {
-    const scale = String(values.scale ?? '')
-    const m = scale.match(/1[–-](\d+)/)
-    if (m) return Number(m[1])
-    return params?.bcsScaleMax ?? 9
-  }, [values.scale, params])
+  const scoreMax = params?.bcsScaleMax ?? 9
 
   async function addPhotos(files: FileList | null) {
     if (!files?.length) return
@@ -148,7 +145,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
     const next: Record<string, string> = {}
     if (spec.needsAnimal && !animalId) next.__animal = 'ต้องเลือกตัวสัตว์ก่อน'
     for (const f of fields) {
-      if (!f.required) continue
+      if (!f.required || f.hidden) continue
       const v = values[f.key]
       if (f.type === 'bool') continue
       if (v === undefined || v === null || v === '') next[f.key] = 'จำเป็นต้องกรอก'
@@ -301,9 +298,9 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         </Card>
       )}
 
-      {fields.length > 0 ? (
+      {shown.length > 0 ? (
         <Card title="รายละเอียดที่ต้องบันทึก">
-          {fields.map((f) => (
+          {shown.map((f) => (
             <FieldInput
               key={f.key}
               field={f}
@@ -351,13 +348,13 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         </ul>
       </Card>
 
-      {fields.length > 0 && readOnly && (
+      {shown.length > 0 && readOnly && (
         <Card>
           <Empty>บัญชีนี้มีสิทธิ์ดูอย่างเดียว จึงบันทึกกิจกรรมนี้ไม่ได้</Empty>
         </Card>
       )}
 
-      {fields.length > 0 && !readOnly && (
+      {shown.length > 0 && !readOnly && (
         <div className="sticky-save">
           <button className="btn full" onClick={() => void submit()} disabled={saving}>
             {saving ? 'กำลังบันทึก…' : 'บันทึก'}

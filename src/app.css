@@ -61,8 +61,8 @@
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
-  /* 88px คือที่ว่างให้แถบเมนูล่างที่ลอยทับอยู่ ไม่ใช่ระยะห่างเชิงดีไซน์ */
-  padding: 0 var(--sp-5) calc(88px + env(safe-area-inset-bottom));
+  /* เว้นที่ให้แถบเมนูล่างที่ลอยทับอยู่ บวกช่องไฟอีกหน่อยไม่ให้เนื้อหาชนแถบ */
+  padding: 0 var(--sp-5) calc(var(--tabbar-h) + var(--sp-5) + env(safe-area-inset-bottom));
 }
 
 /* ── แถบเมนูล่าง (มือถือ) ── */
@@ -157,14 +157,17 @@
   transform: translateX(15px);
   min-width: 16px;
   height: 16px;
-  padding: 0 var(--sp-1);
+  padding: 0 4px;
   border-radius: var(--r-pill);
   background: var(--crit);
   color: #fff;
-  font-size: var(--fs-xxs);
+  font-size: 10px;
   line-height: 16px;
   text-align: center;
   font-weight: var(--fw-bold);
+  box-shadow: 0 0 0 2px var(--card);
+  max-width: 34px;
+  overflow: hidden;
 }
 
 @media (min-width: 860px) {
@@ -562,9 +565,10 @@
 
 .sticky-save {
   position: sticky;
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   margin: var(--sp-5) calc(var(--sp-5) * -1) 0;
-  padding: var(--sp-5) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom));
+  /* ไม่ต้องบวก safe-area ซ้ำ เพราะแถบเมนูด้านล่างกินส่วนนั้นไปแล้ว */
+  padding: var(--sp-5);
   background: var(--paper);
   border-top: 1px solid var(--hair);
 }
@@ -580,7 +584,16 @@
 
 @media (min-width: 860px) {
   .sticky-save {
-    bottom: 12px;
+    bottom: var(--sp-4);
+  }
+
+  /* จอกว้าง แถบเมนูย้ายไปอยู่บน ไม่ต้องเผื่อที่ด้านล่างแล้ว */
+  .shell-body {
+    padding-bottom: var(--sp-8);
+  }
+
+  .toasts {
+    bottom: var(--sp-6);
   }
 }
 
@@ -767,7 +780,7 @@ table.data td.num {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(88px + env(safe-area-inset-bottom));
+  bottom: calc(var(--tabbar-h) + var(--sp-4) + env(safe-area-inset-bottom));
   z-index: 70;
   display: flex;
   flex-direction: column;
@@ -1571,6 +1584,7 @@ table.data td.num {
 .bell {
   position: relative;
   flex: none;
+  margin-right: var(--sp-1);
   width: 36px;
   height: 36px;
   border-radius: var(--r-sm);
@@ -1582,20 +1596,27 @@ table.data td.num {
   place-items: center;
 }
 
+/* ป้ายจำนวนบนกระดิ่ง
+   เกาะมุมบนขวาแบบไม่ล้ำออกนอกกรอบปุ่ม เลขสองหลักขึ้นไปจึงยืดไปทางซ้ายแทน
+   วงขาวรอบป้ายใช้ box-shadow ไม่ใช่ border เพราะ border จะไปเพิ่มขนาดป้ายด้วย */
 .bell .dot {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 var(--sp-1);
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   border-radius: var(--r-pill);
   background: var(--crit);
   color: #fff;
-  font-size: var(--fs-xxs);
-  line-height: 17px;
+  font-size: 10px;
+  line-height: 16px;
   font-weight: var(--fw-bold);
   text-align: center;
+  box-shadow: 0 0 0 2px var(--card);
+  /* กันไม่ให้เลขหลายหลักดันป้ายจนไปทับปุ่มบัญชีที่อยู่ถัดไป */
+  max-width: 34px;
+  overflow: hidden;
 }
 
 /* โลโก้สหกรณ์บนหัวแอป — ตัวโลโก้เป็นวงกลมพื้นครีมอยู่แล้ว จึงไม่ใส่พื้นซ้อนอีก */
@@ -1636,7 +1657,9 @@ table.data td.num {
 
 .score-box {
   aspect-ratio: 1 / 1;
-  min-height: 38px;
+  /* ปล่อยให้ย่อตามความกว้างที่เหลือจริง จอแคบจะได้ไม่ดันตารางล้นออกนอกการ์ด */
+  min-width: 0;
+  min-height: 0;
   display: grid;
   place-items: center;
   border-radius: var(--r-sm);
@@ -1675,10 +1698,10 @@ table.data td.num {
   color: var(--info);
 }
 
-/* ช่องที่เลือก ทึบและมีวงแหวนรอบ เห็นชัดแม้กลางแดด */
+/* ช่องที่เลือก ทึบและมีวงแหวนด้านใน เห็นชัดแม้กลางแดด
+   ไม่ขยายช่องและไม่ใช้วงแหวนรอบนอก เพราะช่องที่ 1 กับ 9 จะล้ำออกนอกขอบการ์ด */
 .score-box[aria-pressed='true'] {
   color: #fff;
-  transform: scale(1.08);
 }
 
 .score-box.thin[aria-pressed='true'] {
@@ -1690,8 +1713,8 @@ table.data td.num {
     color-mix(in srgb, #000 12%, var(--crit)) 100%
   );
   box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 0 0 3px color-mix(in srgb, var(--crit) 20%, transparent),
     0 2px 6px -2px color-mix(in srgb, var(--crit) 55%, transparent);
 }
 
@@ -1704,8 +1727,8 @@ table.data td.num {
     color-mix(in srgb, #000 12%, var(--ok)) 100%
   );
   box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent),
     0 2px 6px -2px color-mix(in srgb, var(--ok) 55%, transparent);
 }
 
@@ -1718,8 +1741,8 @@ table.data td.num {
     color-mix(in srgb, #000 12%, var(--info)) 100%
   );
   box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 0 0 3px color-mix(in srgb, var(--info) 20%, transparent),
     0 2px 6px -2px color-mix(in srgb, var(--info) 55%, transparent);
 }
 
@@ -2112,7 +2135,7 @@ table.data td.num {
 /* ── แถบเครื่องมือลอยตอนเลือกงานไว้หลายใบ ── */
 .bulkbar {
   position: sticky;
-  bottom: calc(78px + env(safe-area-inset-bottom));
+  bottom: calc(var(--tabbar-h) + var(--sp-2) + env(safe-area-inset-bottom));
   z-index: 25;
   margin: var(--sp-5) 0 0;
   padding: var(--sp-4);
@@ -2262,3 +2285,15 @@ a.statusbar {
 
 /* โหมดมืด — ไล่สีต้องกลับทิศเล็กน้อย ไม่งั้นขอบบนสว่างจนดูลอยเกินจริง */
 
+
+/* จอแคบมาก (ราว 320px) ช่องคะแนนเหลือกว้างแค่ 24px
+   ลดช่องไฟกับขนาดตัวเลขลง ตัวเลขจะได้ไม่ชนขอบช่อง */
+@media (max-width: 380px) {
+  .score-grid {
+    gap: 3px;
+  }
+
+  .score-box {
+    font-size: var(--fs-md);
+  }
+}
