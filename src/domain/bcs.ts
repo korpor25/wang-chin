@@ -28,9 +28,16 @@ export function bcsBand(score: number): BcsBand {
 }
 
 export const BAND_LABEL: Record<BcsBand, string> = {
-  thin: 'กลุ่ม 1–3 · ผอม (Thin)',
-  ideal: 'กลุ่ม 4–6 · สมบูรณ์ (Ideal)',
-  fat: 'กลุ่ม 7–9 · อ้วน (Fat)',
+  thin: 'ผอม',
+  ideal: 'สมบูรณ์',
+  fat: 'อ้วน',
+}
+
+/** ช่วงคะแนนของแต่ละกลุ่ม ใช้เวลาต้องบอกว่ากลุ่มนั้นคือเลขอะไรถึงอะไร */
+export const BAND_RANGE: Record<BcsBand, string> = {
+  thin: '1–3',
+  ideal: '4–6',
+  fat: '7–9',
 }
 
 /** โทนสีของแต่ละกลุ่ม ผูกกับโทเคนสีเดียวกับทั้งระบบ */
@@ -82,6 +89,6 @@ export function bcsAdvice(score: number, p: BioParams): BcsAdvice {
     }
   return {
     tone: 'ok',
-    text: `BCS ${score.toFixed(1)} อยู่ในช่วงสมบูรณ์ (${BAND_LABEL.ideal}) — เหมาะกับการเข้าโปรแกรมผสมเทียม`,
+    text: `BCS ${score.toFixed(1)} อยู่ในกลุ่มสมบูรณ์ — เหมาะกับการเข้าโปรแกรมผสมเทียม`,
   }
 }

@@ -85,6 +85,7 @@ export function AnimalDetail() {
         hint={`${animal.rfid} · ${farm?.name ?? animal.farmId}`}
         action={<Pill tone={animal.stage === 'problem' ? 'crit' : 'ok'}>{CYCLE_LABEL[animal.stage]}</Pill>}
       >
+        <CowModel label={animal.tagNo} />
         <Chips value={tab} options={TABS} onChange={setTab} />
       </Card>
 
@@ -104,7 +105,6 @@ export function AnimalDetail() {
                 ['BCS ล่าสุด', animal.lastBcs !== null ? `${animal.lastBcs} / ${params.bcsScaleMax}` : 'ยังไม่เคยประเมิน'],
               ]}
             />
-            <CowModel label={animal.tagNo} />
           </Card>
 
           {blockers.length > 0 && (

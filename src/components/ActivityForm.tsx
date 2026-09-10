@@ -17,14 +17,7 @@ import { saveRecord } from '../data/sync'
 import { applyEffects, closeTask } from '../data/effects'
 import { getParams, searchAnimals } from '../data/queries'
 import { breedingBlockers } from '../domain/rules'
-import {
-  BAND_CHECKS,
-  BAND_LABEL,
-  BAND_TONE,
-  BCS9_LABEL,
-  bcsAdvice,
-  bcsBand,
-} from '../domain/bcs'
+import { BAND_CHECKS, BAND_LABEL, BAND_RANGE, BCS9_LABEL, bcsAdvice, bcsBand } from '../domain/bcs'
 import { compressImage } from '../lib/image'
 import { useAccount } from '../state/session'
 import { bytes } from '../lib/format'
@@ -380,7 +373,7 @@ function BcsPanel({ score, params }: { score: number; params: BioParams }) {
           <Beef size={40} />
         </div>
         <h3>
-          BCS {score.toFixed(1)} · {BAND_LABEL[band]}
+          BCS {score.toFixed(1)} · กลุ่ม{BAND_LABEL[band]}
         </h3>
         <p className="hint">สิ่งที่ควรคลำได้จริงเมื่อโคอยู่ในกลุ่มนี้</p>
         <div className="band-checks">
@@ -523,19 +516,22 @@ function FieldInput({
               <span className="big">{picked}</span>
               <span>
                 <span className="lab">{BCS9_LABEL[picked]}</span>
-                <span className="sub">{BAND_LABEL[bcsBand(picked)]}</span>
+                <span className="sub">
+                  กลุ่ม {BAND_RANGE[bcsBand(picked)]} · {BAND_LABEL[bcsBand(picked)]}
+                </span>
               </span>
             </div>
           ) : (
             <div className="score-pick empty">แตะเลือกคะแนน 1–9 จากแถวด้านบน</div>
           ))}
 
+        {/* วางใต้ตารางให้แต่ละช่วงอยู่ตรงกับตัวเลขของมันพอดี ไม่ต้องเขียนกำกับว่ากลุ่มไหนคือเลขอะไร */}
         {nine && (
-          <div className="band-row">
+          <div className="band-legend">
             {(['thin', 'ideal', 'fat'] as const).map((b) => (
-              <Pill key={b} tone={BAND_TONE[b]}>
+              <span key={b} className={`band-seg ${b}`}>
                 {BAND_LABEL[b]}
-              </Pill>
+              </span>
             ))}
           </div>
         )}
