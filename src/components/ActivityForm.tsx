@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { Beef, Camera, CircleCheck, Lightbulb, TriangleAlert, X } from 'lucide-react'
+import { Camera, CircleCheck, Lightbulb, TriangleAlert, X } from 'lucide-react'
 import type { ActivitySpec, FieldSpec } from '../domain/activities'
 import type { Animal, BioParams, SemenBatch } from '../domain/types'
 import { Card, Empty, Field, List, Note, PageHeader, Pill, Row, SearchBox } from './ui'
@@ -21,6 +21,7 @@ import { BAND_CHECKS, BAND_LABEL, BAND_RANGE, BCS9_LABEL, bcsAdvice, bcsBand } f
 import { compressImage } from '../lib/image'
 import { useAccount } from '../state/session'
 import { bytes } from '../lib/format'
+import { CowModel } from './CowModel'
 import { toast } from './Toast'
 
 const localNow = (withTime: boolean) => {
@@ -330,7 +331,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
       )}
 
       {spec.code === 'ก-03' && params && Number(values.score) > 0 && (
-        <BcsPanel score={Number(values.score)} params={params} />
+        <BcsPanel score={Number(values.score)} params={params} label={animal?.tagNo ?? ''} />
       )}
 
       <Card title="ระบบจะทำอะไรต่อ">
@@ -363,15 +364,21 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
  * แผงอธิบายคะแนน BCS ที่เลือก — บอกว่าคะแนนนี้อยู่กลุ่มไหน คลำอะไรได้บ้าง
  * และระบบแนะนำอะไรต่อ คำแนะนำเทียบกับเกณฑ์เข้าผสมใน BioParams ไม่ใช่เลขตายตัว
  */
-function BcsPanel({ score, params }: { score: number; params: BioParams }) {
+function BcsPanel({
+  score,
+  params,
+  label,
+}: {
+  score: number
+  params: BioParams
+  label: string
+}) {
   const band = bcsBand(score)
   const advice = bcsAdvice(score, params)
   return (
     <Card>
       <div className="band-card">
-        <div className="hero-art">
-          <Beef size={40} />
-        </div>
+        <CowModel label={label} />
         <h3>
           BCS {score.toFixed(1)} · กลุ่ม{BAND_LABEL[band]}
         </h3>
