@@ -213,6 +213,37 @@ export async function searchAnimals(f: AnimalFilter): Promise<Animal[]> {
   return rows.slice(0, f.limit ?? 100)
 }
 
+const lastTouch = (a: Animal) =>
+  Math.max(a.lastHeatAt ?? 0, a.lastBredAt ?? 0, a.lastCalvingAt ?? 0, a.birthDate)
+
+/**
+ * โคที่เพิ่งถูกบันทึกล่าสุด ใช้เป็นรายชื่อตั้งต้นของช่องเลือกตัวสัตว์
+ *
+ * งานภาคสนามมักวนอยู่กับโคชุดเดิมติดกันหลายกิจกรรม เช่น จับสัด แล้วผสม
+ * แล้วให้คะแนน BCS การไล่จากบันทึกล่าสุดจึงตรงกับตัวที่กำลังจะกรอกบ่อยกว่า
+ * การเรียงตามเบอร์หู ถ้าเครื่องยังไม่มีบันทึกเลย ให้ไล่จากตัวที่มีความ
+ * เคลื่อนไหวในวงรอบล่าสุดแทน จะได้ไม่ขึ้นรายการว่าง
+ */
+export async function recentAnimals(limit = 6, farmIds?: string[]): Promise<Animal[]> {
+  const inScope = (a: Animal) => a.active && (!farmIds?.length || farmIds.includes(a.farmId))
+  const picked: Animal[] = []
+  const seen = new Set<string>()
+
+  const recs = await db.records.orderBy('occurredAt').reverse().limit(120).toArray()
+  for (const r of recs) {
+    if (!r.animalId || seen.has(r.animalId)) continue
+    seen.add(r.animalId)
+    const a = await db.animals.get(r.animalId)
+    if (a && inScope(a)) picked.push(a)
+    if (picked.length >= limit) return picked
+  }
+
+  const rest = (await db.animals.toArray())
+    .filter((a) => inScope(a) && !seen.has(a.id))
+    .sort((a, b) => lastTouch(b) - lastTouch(a))
+  return picked.concat(rest).slice(0, limit)
+}
+
 export async function animalTimeline(animalId: string) {
   const rows = await db.records.where('animalId').equals(animalId).toArray()
   return rows.sort((a, b) => b.occurredAt - a.occurredAt)

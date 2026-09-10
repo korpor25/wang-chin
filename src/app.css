@@ -1061,6 +1061,104 @@ table.data td.num {
   min-width: 0;
 }
 
+/* ── รายการเลือกตัวโค ── */
+.picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--muted);
+}
+
+.picker-head span {
+  font-weight: var(--fw-normal);
+  color: var(--faint);
+}
+
+.picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+
+.picker-item:active {
+  transform: scale(0.99);
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+.picker-tag {
+  flex: none;
+  min-width: 52px;
+  padding: var(--sp-1) var(--sp-2);
+  text-align: center;
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--brand-2);
+  background: var(--brand-soft);
+  border-radius: var(--r-sm);
+}
+
+.picker-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.picker-title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-sub {
+  font-family: var(--mono);
+  font-size: var(--fs-xxs);
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-stage {
+  flex: none;
+  max-width: 40%;
+  font-size: var(--fs-xxs);
+  color: var(--body);
+  background: var(--sunk);
+  border-radius: var(--r-pill);
+  padding: 3px var(--sp-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── รูปแนบ ── */
 .photo-pick {
   display: flex;

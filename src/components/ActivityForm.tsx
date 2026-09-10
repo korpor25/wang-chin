@@ -10,12 +10,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Camera, CircleCheck, Lightbulb, TriangleAlert, X } from 'lucide-react'
 import type { ActivitySpec, FieldSpec } from '../domain/activities'
+import { CYCLE_LABEL } from '../domain/types'
 import type { Animal, BioParams, SemenBatch } from '../domain/types'
-import { Card, Empty, Field, List, Note, PageHeader, Pill, Row, SearchBox } from './ui'
+import { Card, Empty, Field, Note, PageHeader, SearchBox } from './ui'
 import { db, newLocalId } from '../data/db'
 import { saveRecord } from '../data/sync'
 import { applyEffects, closeTask } from '../data/effects'
-import { getParams, searchAnimals } from '../data/queries'
+import { getParams, recentAnimals, searchAnimals } from '../data/queries'
 import { breedingBlockers } from '../domain/rules'
 import { BAND_CHECKS, BAND_LABEL, BAND_RANGE, BCS9_LABEL, bcsAdvice, bcsBand } from '../domain/bcs'
 import { compressImage } from '../lib/image'
@@ -632,37 +633,73 @@ function ErrorText({ msg }: { msg: string }) {
 }
 
 export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; open: boolean }) {
+  const { userId, role } = useAccount()
   const [q, setQ] = useState('')
-  const [rows, setRows] = useState<Animal[]>([])
+  const [hits, setHits] = useState<Animal[]>([])
+  const [recent, setRecent] = useState<Animal[]>([])
+  // เกษตรกรเลือกได้เฉพาะโคในฟาร์มตัวเอง ยังไม่รู้ขอบเขตก็ยังไม่ต้องคิวรี
+  const [scope, setScope] = useState<string[] | null>(role === 'farmer' ? null : [])
 
   useEffect(() => {
-    if (!open) return
+    if (role !== 'farmer') return
     let alive = true
-    void searchAnimals({ q, limit: 25 }).then((r) => alive && setRows(r))
+    void db.users.get(userId).then((u) => alive && setScope(u?.farmIds ?? []))
     return () => {
       alive = false
     }
-  }, [q, open])
+  }, [role, userId])
+
+  useEffect(() => {
+    if (!open || !scope) return
+    let alive = true
+    void recentAnimals(6, scope).then((r) => alive && setRecent(r))
+    return () => {
+      alive = false
+    }
+  }, [open, scope])
+
+  useEffect(() => {
+    if (!open || !scope || q.trim() === '') return
+    let alive = true
+    void searchAnimals({ q, limit: 25 }).then((r) => {
+      if (alive) setHits(scope.length ? r.filter((a) => scope.includes(a.farmId)) : r)
+    })
+    return () => {
+      alive = false
+    }
+  }, [q, open, scope])
+
+  const searching = q.trim() !== ''
+  const rows = searching ? hits.slice(0, 8) : recent
 
   return (
     <>
       <SearchBox value={q} onChange={setQ} placeholder="สแกนหรือพิมพ์ RFID / เบอร์หู" />
-      {q.trim() === '' ? (
-        <Empty>สแกนแท็กที่ตัวสัตว์ หรือพิมพ์เลขบางส่วนเพื่อค้นหา</Empty>
-      ) : rows.length === 0 ? (
-        <Empty>ไม่พบตัวที่ค้นหา</Empty>
+      {rows.length === 0 ? (
+        <Empty>{searching ? 'ไม่พบตัวที่ค้นหา' : 'ยังไม่มีโคในความดูแล'}</Empty>
       ) : (
-        <List>
-          {rows.slice(0, 6).map((a) => (
-            <Row
-              key={a.id}
-              onClick={() => onPick(a)}
-              badge={<Pill tone="mute">{a.tagNo}</Pill>}
-              title={`${a.breed} ${a.bloodPct}%`}
-              sub={a.rfid}
-            />
-          ))}
-        </List>
+        <>
+          <p className="picker-head">
+            {searching ? `พบ ${hits.length} ตัว` : 'บันทึกล่าสุด'}
+            {!searching && <span>แตะเพื่อเลือก หรือสแกนแท็กที่ตัวสัตว์</span>}
+          </p>
+          <ul className="picker-list">
+            {rows.map((a) => (
+              <li key={a.id}>
+                <button type="button" className="picker-item" onClick={() => onPick(a)}>
+                  <span className="picker-tag">{a.tagNo}</span>
+                  <span className="picker-main">
+                    <span className="picker-title">
+                      {a.breed} {a.bloodPct}%
+                    </span>
+                    <span className="picker-sub">{a.rfid}</span>
+                  </span>
+                  <span className="picker-stage">{CYCLE_LABEL[a.stage]}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </>
   )
