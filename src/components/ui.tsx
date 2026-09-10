@@ -141,47 +141,6 @@ export function List({ children }: { children: ReactNode }) {
   return <ul className="list">{children}</ul>
 }
 
-/**
- * การ์ดขั้นตอนแบบตาราง — ไอคอน รหัสกิจกรรม ชื่อ และคำกำกับสั้น ๆ
- * ใบที่ระบบชี้ว่าควรทำก่อนให้ส่ง active มา จะได้ขอบและพื้นสีของบทบาทนั้น
- */
-export function Tile({
-  to,
-  Icon,
-  code,
-  label,
-  note,
-  tone,
-  active,
-}: {
-  to: string
-  Icon: IconType
-  code?: string
-  label: string
-  note?: string
-  tone?: 'warn' | 'info'
-  active?: boolean
-}) {
-  return (
-    <Link className={active ? 'tile on' : 'tile'} to={to}>
-      <span className={tone ? `tile-icon ${tone}` : 'tile-icon'}>
-        <Icon size={19} />
-      </span>
-      {code && <span className="code">{code}</span>}
-      <span className="tile-label">{label}</span>
-      {note && <span className="tile-note">{note}</span>}
-    </Link>
-  )
-}
-
-export function TileGrid({ children }: { children: ReactNode }) {
-  return <div className="tile-grid">{children}</div>
-}
-
-/**
- * กิจกรรมหนึ่งรายการแบบเรียงลงมา — ไอคอน รหัส ชื่อ และเงื่อนไขที่ต้องทำ
- * ใช้แทนการ์ดตารางเมื่อมีหลายรายการ เพราะชื่อกิจกรรมยาวเกินกว่าจะบีบลงช่องเล็ก
- */
 export function ActRow({
   to,
   Icon,

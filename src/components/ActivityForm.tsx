@@ -57,6 +57,8 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState<{ messages: string[]; tasksCreated: number } | null>(null)
   const [picking, setPicking] = useState(false)
+  const [flash, setFlash] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const photosRef = useRef<PendingPhoto[]>([])
   photosRef.current = photos
 
@@ -99,6 +101,21 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), [])
 
   const set = (k: string, v: unknown) => setValues((prev) => ({ ...prev, [k]: v }))
+
+  /**
+   * กิจกรรมที่ต้องระบุตัวสัตว์ ยังกรอกอะไรไม่ได้จนกว่าจะเลือกโคก่อน
+   *
+   * เดิมกรอกได้หมดแล้วค่อยไปเจอตอนกดบันทึกว่าลืมเลือกตัว ซึ่งเสียเวลากรอกซ้ำ
+   * และหน้างานมือเปื้อนอยู่แล้ว ปิดช่องกรอกไว้ก่อนจึงดีกว่าเตือนทีหลัง
+   */
+  const locked = spec.needsAnimal && !animalId
+
+  function focusPicker() {
+    setPicking(true)
+    pickerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setFlash(true)
+    window.setTimeout(() => setFlash(false), 1200)
+  }
 
   const blockers = useMemo(
     () => (animal && params && spec.code === 'ก-08' ? breedingBlockers(animal, params) : []),
@@ -259,6 +276,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
       </div>
 
       {spec.needsAnimal && (
+        <div ref={pickerRef} className={flash ? 'flash' : undefined}>
         <Card title="ตัวสัตว์" hint="ยืนยันด้วย RFID หรือเบอร์หู">
           {animal ? (
             <div className="picked">
@@ -275,6 +293,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
           )}
           {errors.__animal && <p className="err">{errors.__animal}</p>}
         </Card>
+        </div>
       )}
 
       {blockers.length > 0 && (
@@ -291,7 +310,16 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         </Card>
       )}
 
-      {shown.length > 0 ? (
+      {locked ? (
+        <Card title="รายละเอียดที่ต้องบันทึก">
+          <Empty>เลือกตัวโคก่อน แล้วช่องกรอกจะเปิดให้ — ระบบต้องรู้ว่าบันทึกนี้เป็นของตัวไหน</Empty>
+          <div className="row">
+            <button className="btn" onClick={focusPicker}>
+              เลือกตัวโค <span className="go">↑</span>
+            </button>
+          </div>
+        </Card>
+      ) : shown.length > 0 ? (
         <Card title="รายละเอียดที่ต้องบันทึก">
           {shown.map((f) => (
             <FieldInput
@@ -341,13 +369,13 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         </ul>
       </Card>
 
-      {shown.length > 0 && readOnly && (
+      {shown.length > 0 && !locked && readOnly && (
         <Card>
           <Empty>บัญชีนี้มีสิทธิ์ดูอย่างเดียว จึงบันทึกกิจกรรมนี้ไม่ได้</Empty>
         </Card>
       )}
 
-      {shown.length > 0 && !readOnly && (
+      {shown.length > 0 && !locked && !readOnly && (
         <div className="sticky-save">
           <button className="btn full" onClick={() => void submit()} disabled={saving}>
             {saving ? 'กำลังบันทึก…' : 'บันทึก'}

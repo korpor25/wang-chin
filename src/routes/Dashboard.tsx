@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { AlarmClock, CalendarClock } from 'lucide-react'
-import { Card, Empty, List, Pill, Row, Stat, Stats, Tile, TileGrid } from '../components/ui'
+import { ActRow, Card, Empty, List, Pill, Row, Stat, Stats } from '../components/ui'
 import { activityIcon } from '../components/activityIcon'
 import { activitiesForRole } from '../domain/activities'
 import { CYCLE_LABEL, type Task } from '../domain/types'
@@ -94,18 +94,17 @@ export function Dashboard() {
             </Link>
           }
         >
-          <TileGrid>
-            {steps.slice(0, 3).map((a) => (
-              <Tile
-                key={a.code}
-                to={`/record/${encodeURIComponent(a.code)}`}
-                Icon={activityIcon(a.code)}
-                code={a.code}
-                label={a.name}
-                active={a.code === nextCode}
-              />
-            ))}
-          </TileGrid>
+          {steps.slice(0, 3).map((a) => (
+            <ActRow
+              key={a.code}
+              to={`/record/${encodeURIComponent(a.code)}`}
+              Icon={activityIcon(a.code)}
+              code={a.code}
+              name={a.name}
+              sub={a.trigger}
+              active={a.code === nextCode}
+            />
+          ))}
         </Card>
       )}
 
