@@ -520,52 +520,20 @@ function FieldInput({
     const picked = Number(value)
     return (
       <Field label={label} hint={`เกณฑ์มาตรฐาน ${min}–${max} ${nine ? 'สำหรับโคเนื้อ' : ''}`}>
-        {/* สเกล 9 ระดับแตกเป็น 3 แถวตามกลุ่มคะแนน แถวละ 3 ปุ่ม
-            ปุ่มจึงกว้างพอให้ผู้สูงอายุกดได้ถนัด และมีที่เขียนคำกำกับไทยในปุ่มเลย */}
-        {nine ? (
-          <div className="score-bands">
-            {(['thin', 'ideal', 'fat'] as const).map((b) => (
-              <div key={b} className={`score-band ${b}`}>
-                <div className="score-band-head">
-                  <span className="nm">{BAND_LABEL[b]}</span>
-                  <span className="rg">{BAND_RANGE[b]}</span>
-                </div>
-                <div className="score-row">
-                  {nums
-                    .filter((n) => bcsBand(n) === b)
-                    .map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        className={`score-box ${b}`}
-                        aria-pressed={picked === n}
-                        aria-label={`${n} ${BCS9_LABEL[n]}`}
-                        onClick={() => onChange(n)}
-                      >
-                        <span className="num">{n}</span>
-                        <span className="lab">{BCS9_LABEL[n]}</span>
-                      </button>
-                    ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="score-grid five">
-            {nums.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className="score-box"
-                aria-pressed={picked === n}
-                aria-label={String(n)}
-                onClick={() => onChange(n)}
-              >
-                <span className="num">{n}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className={nine ? 'score-grid' : 'score-grid five'}>
+          {nums.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`score-box ${nine ? bcsBand(n) : ''}`.trim()}
+              aria-pressed={picked === n}
+              aria-label={nine ? `${n} ${BCS9_LABEL[n]}` : String(n)}
+              onClick={() => onChange(n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
 
         {/* คะแนนที่เลือกต้องอ่านออกทันทีโดยไม่ต้องเพ่ง คำกำกับจึงมาอยู่ตรงนี้แทนในช่องเล็ก */}
         {nine &&
@@ -582,6 +550,17 @@ function FieldInput({
           ) : (
             <div className="score-pick empty">แตะเลือกคะแนน 1–9 จากแถวด้านบน</div>
           ))}
+
+        {/* วางใต้ตารางให้แต่ละช่วงอยู่ตรงกับตัวเลขของมันพอดี ไม่ต้องเขียนกำกับว่ากลุ่มไหนคือเลขอะไร */}
+        {nine && (
+          <div className="band-legend">
+            {(['thin', 'ideal', 'fat'] as const).map((b) => (
+              <span key={b} className={`band-seg ${b}`}>
+                {BAND_LABEL[b]}
+              </span>
+            ))}
+          </div>
+        )}
 
         {error && <ErrorText msg={error} />}
       </Field>
