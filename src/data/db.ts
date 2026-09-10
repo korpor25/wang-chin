@@ -11,6 +11,7 @@ import type {
   ActivityRecord,
   Alert,
   Animal,
+  CoopEvent,
   Farm,
   FeedGroup,
   FeedLot,
@@ -54,6 +55,7 @@ class WangchinDb extends Dexie {
   photos!: Table<Photo, number>
   tasks!: Table<Task, number>
   alerts!: Table<Alert, number>
+  events!: Table<CoopEvent, number>
   outbox!: Table<OutboxItem, number>
   counters!: Table<Counter, string>
   settings!: Table<Setting, string>
@@ -78,6 +80,18 @@ class WangchinDb extends Dexie {
       settings: 'key',
       audit: '++id, at, actor',
     })
+
+    /**
+     * เวอร์ชัน 2 — เพิ่มตารางกิจกรรมสหกรณ์ (ALR-01) และ index ผู้รับผิดชอบรายบุคคล
+     * ที่หน้ามอบหมายงานกับกล่องงานของแต่ละคนต้องใช้ (ASG-02, ASG-05)
+     * ไม่ต้องมี upgrade() เพราะเป็นการเพิ่มตารางและ index ล้วน ๆ ข้อมูลเดิมอยู่ครบ
+     */
+    this.version(2).stores({
+      tasks:
+        '++id, localId, activityCode, animalId, farmId, dueAt, status, assignedRole, assignedTo',
+      alerts: '++id, localId, taskLocalId, toRole, sentAt, level, ackAt, resolvedAt',
+      events: '++id, localId, startAt, audience',
+    })
   }
 }
 
@@ -98,10 +112,6 @@ export async function bumpCounter(key: string, delta: number) {
     const next = Math.max(0, (row?.value ?? 0) + delta)
     await db.counters.put({ key, value: next })
   })
-}
-
-export async function getCounter(key: string): Promise<number> {
-  return (await db.counters.get(key))?.value ?? 0
 }
 
 /**

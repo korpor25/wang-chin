@@ -57,7 +57,7 @@ function ToastItem({ item }: { item: Item }) {
   const Icon = item.kind === 'ok' ? CircleCheck : item.kind === 'crit' ? CircleAlert : Info
   return (
     <div className={`toast ${item.kind}`} role="status">
-      <Icon size={17} style={{ flex: 'none' }} />
+      <Icon size={17} className="ic" />
       <span>{item.text}</span>
     </div>
   )

@@ -21,6 +21,8 @@ export const DEFAULT_PARAMS: BioParams = {
   bcsMinBeforeBreeding: 5,
   alertLeadDays: 2,
   escalateAfterDays: 3,
+  semenWarnStraws: 12,
+  semenCritStraws: 4,
 }
 
 export const PARAM_LABEL: Record<keyof BioParams, string> = {
@@ -37,7 +39,9 @@ export const PARAM_LABEL: Record<keyof BioParams, string> = {
   bcsScaleMax: 'ค่าสูงสุดของสเกล BCS',
   bcsMinBeforeBreeding: 'BCS ต่ำสุดที่ยอมให้เข้าผสม',
   alertLeadDays: 'แจ้งเตือนล่วงหน้า',
-  escalateAfterDays: 'ยกระดับเมื่อเลยกำหนดเกิน',
+  escalateAfterDays: 'ส่งให้สหกรณ์ตาม เมื่อค้างเกิน',
+  semenWarnStraws: 'น้ำเชื้อคงเหลือระดับเฝ้าระวัง (สีส้ม)',
+  semenCritStraws: 'น้ำเชื้อคงเหลือระดับวิกฤต (สีแดง)',
 }
 
 export const PARAM_UNIT: Record<keyof BioParams, string> = {
@@ -55,6 +59,8 @@ export const PARAM_UNIT: Record<keyof BioParams, string> = {
   bcsMinBeforeBreeding: 'คะแนน',
   alertLeadDays: 'วัน',
   escalateAfterDays: 'วัน',
+  semenWarnStraws: 'หลอด',
+  semenCritStraws: 'หลอด',
 }
 
 const DAY = 86_400_000
@@ -156,15 +162,7 @@ export function tasksAfterPregnancy(bredAt: number, p: BioParams): DerivedTask[]
       priority: 'low',
       derivedFrom: 'กึ่งกลางระยะตั้งท้อง',
     },
-    {
-      activityCode: 'ข-04',
-      title: 'ย้ายกลุ่มอาหารเข้าระยะพักก่อนคลอด',
-      dueAt: addDays(calving, -p.dryOffBeforeCalvingDays),
-      toleranceDays: 5,
-      assignedRole: 'coop',
-      priority: 'normal',
-      derivedFrom: `คลอดคาดการณ์ − ${p.dryOffBeforeCalvingDays} วัน`,
-    },
+    // งานย้ายกลุ่มอาหารก่อนคลอด (ข-04) ยกไปพร้อมภาค ข ในเฟสถัดไป
     {
       activityCode: 'ก-11',
       title: 'เตรียมโคและคอกคลอด',
@@ -184,6 +182,62 @@ export function tasksAfterPregnancy(bredAt: number, p: BioParams): DerivedTask[]
       derivedFrom: `ผสม + ${p.gestationDays} วัน`,
     },
   ]
+}
+
+/**
+ * เกษตรกรแจ้งการคลอด (ก-01) → งานให้สัตวบาลเข้ายืนยันและบันทึกผลการคลอด
+ * ถ้าไม่มีงานใบนี้ การแจ้งของเกษตรกรจะจบลงเป็นแค่ข้อความ ไม่มีใครถูกมอบหมายให้ไปดูจริง
+ */
+export function taskConfirmCalving(foundAt: number, reporter: string): DerivedTask {
+  return {
+    activityCode: 'ก-02',
+    title: 'ยืนยันการคลอดและบันทึกผลการคลอด',
+    dueAt: foundAt,
+    toleranceDays: 1,
+    assignedRole: 'husbandry',
+    priority: 'high',
+    derivedFrom: `เกษตรกรแจ้งการคลอด (${reporter})`,
+  }
+}
+
+/**
+ * เกษตรกรแจ้งอาการเป็นสัด (ก-07) → งานให้สัตวบาลยืนยันว่าเป็นสัดจริงหรือสัดหลอก
+ * ที่ประชุมระบุว่าต้องมีขั้นยืนยันก่อน ไม่ใช่สร้างงานผสมจากคำแจ้งของเกษตรกรตรง ๆ
+ * งานยืนยันจึงถึงกำหนดก่อนช่วงผสมที่เหมาะสมจะเริ่ม เพื่อให้ยังทันรอบนี้
+ */
+export function taskConfirmHeat(observedAt: number, p: BioParams, reporter: string): DerivedTask {
+  return {
+    activityCode: 'ก-07',
+    title: 'ยืนยันอาการเป็นสัดที่เกษตรกรแจ้ง',
+    dueAt: addHours(observedAt, Math.max(0, p.goldenPeriodFromHours - 2)),
+    toleranceDays: 1,
+    assignedRole: 'husbandry',
+    priority: 'high',
+    derivedFrom: `เกษตรกรแจ้งอาการเป็นสัด (${reporter})`,
+  }
+}
+
+/** ยืนยันแล้วว่าเป็นสัดจริง → งานผสมภายในช่วงที่เหมาะสม */
+export function taskInseminate(observedAt: number, p: BioParams): DerivedTask {
+  return {
+    activityCode: 'ก-08',
+    title: 'ผสมเทียมภายในช่วงที่เหมาะสม',
+    dueAt: addHours(observedAt, p.goldenPeriodFromHours),
+    toleranceDays: 1,
+    assignedRole: 'husbandry',
+    priority: 'high',
+    derivedFrom: `พบอาการเป็นสัด + ${p.goldenPeriodFromHours} ชม.`,
+  }
+}
+
+/**
+ * รหัสสีของสต๊อกน้ำเชื้อ เขียว → ส้ม → แดง (มติ [33:41])
+ * เกณฑ์อยู่ใน BioParams จึงปรับได้เมื่อที่ประชุมยืนยันตัวเลขจริง
+ */
+export function semenTone(strawsLeft: number, p: BioParams): 'ok' | 'warn' | 'crit' {
+  if (strawsLeft <= p.semenCritStraws) return 'crit'
+  if (strawsLeft <= p.semenWarnStraws) return 'warn'
+  return 'ok'
 }
 
 export interface GoldenPeriod {
@@ -225,13 +279,3 @@ export function breedingBlockers(a: Animal, p: BioParams, now = Date.now()): str
   return out
 }
 
-/** ดัชนีความเครียดจากความร้อน (ค-05) — สูตร THI มาตรฐาน */
-export function heatStressIndex(tempC: number, humidityPct: number): number {
-  return Number((0.8 * tempC + (humidityPct / 100) * (tempC - 14.4) + 46.4).toFixed(1))
-}
-
-export function heatStressLevel(thi: number): { label: string; tone: 'ok' | 'warn' | 'crit' } {
-  if (thi < 72) return { label: 'ปกติ', tone: 'ok' }
-  if (thi < 79) return { label: 'เครียดเล็กน้อย', tone: 'warn' }
-  return { label: 'เครียดสูง เลี่ยงการผสม', tone: 'crit' }
-}

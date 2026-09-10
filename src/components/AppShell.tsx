@@ -1,9 +1,11 @@
 /** โครงหน้าจอหลัก — หัวแอป สถานะเครือข่าย เมนูผู้ใช้ และแถบเมนูหลัก */
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router'
+import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import {
   Beef,
+  Bell,
   CircleAlert,
+  ClipboardList,
   ClipboardPlus,
   Download,
   Home,
@@ -11,22 +13,37 @@ import {
   ListChecks,
   LogOut,
   RefreshCw,
+  TriangleAlert,
   WifiOff,
   X,
 } from 'lucide-react'
+import { db } from '../data/db'
 import { useSession } from '../state/session'
-import { ROLE_LABEL } from '../domain/types'
-import { runSync, syncSnapshot, type SyncSnapshot } from '../data/sync'
+import { ROLE_LABEL, type Role } from '../domain/types'
+import { getRetention, runSync, syncSnapshot, type RetentionPolicy, type SyncSnapshot } from '../data/sync'
 import { age } from '../lib/format'
 import { Toasts, toast } from './Toast'
 
-const TABS = [
-  { to: '/', label: 'หน้าแรก', Icon: Home, end: true },
-  { to: '/animals', label: 'ฝูงโค', Icon: Beef, end: false },
-  { to: '/record', label: 'บันทึก', Icon: ClipboardPlus, end: false },
-  { to: '/tasks', label: 'งาน', Icon: ListChecks, end: false },
-  { to: '/more', label: 'เพิ่มเติม', Icon: LayoutGrid, end: false },
-]
+/**
+ * แถบเมนูหลักแยกตามบทบาท (SEC-02)
+ *
+ * เจ้าหน้าที่สหกรณ์ไม่มีกิจกรรมภาค ก ที่ต้องกรอกเองเลยสักรายการ
+ * ช่อง "บันทึก" จึงพาไปหน้าที่กดอะไรไม่ได้ ของเจ้าหน้าที่เป็น "มอบหมาย" แทน
+ * ซึ่งตรงกับบทบาทจริงในเฟสนี้คือมอบหมายและติดตาม
+ */
+function tabsFor(role: Role) {
+  const mid =
+    role === 'coop'
+      ? { to: '/assign', label: 'มอบหมาย', Icon: ClipboardList, end: false }
+      : { to: '/record', label: 'บันทึก', Icon: ClipboardPlus, end: false }
+  return [
+    { to: '/', label: 'หน้าหลัก', Icon: Home, end: true },
+    { to: '/animals', label: 'ฝูงโค', Icon: Beef, end: false },
+    mid,
+    { to: '/tasks', label: 'งาน', Icon: ListChecks, end: false },
+    { to: '/more', label: 'เพิ่มเติม', Icon: LayoutGrid, end: false },
+  ]
+}
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -42,6 +59,8 @@ export function AppShell() {
   const [menu, setMenu] = useState(false)
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null)
   const [installHidden, setInstallHidden] = useState(false)
+  const [unread, setUnread] = useState(0)
+  const [policy, setPolicy] = useState<RetentionPolicy | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -58,11 +77,33 @@ export function AppShell() {
     }
   }, [loc.pathname])
 
+  // จำนวนแจ้งเตือนที่ยังไม่ได้อ่าน ใช้กับกระดิ่งบนหัวแอป
+  useEffect(() => {
+    let alive = true
+    void db.alerts
+      .filter(
+        (a) =>
+          a.toRole === account.role &&
+          (!a.toUser || a.toUser === account.userId) &&
+          a.readAt === null &&
+          a.resolvedAt === null,
+      )
+      .count()
+      .then((n) => alive && setUnread(n))
+    return () => {
+      alive = false
+    }
+  }, [account.role, account.userId, loc.pathname])
+
   // ปิดชีตเมื่อเปลี่ยนหน้า และเลื่อนขึ้นบนสุดเหมือนแอปทั่วไป
   useEffect(() => {
     setMenu(false)
     window.scrollTo(0, 0)
   }, [loc.pathname])
+
+  useEffect(() => {
+    void getRetention().then(setPolicy)
+  }, [])
 
   // ชวนติดตั้งลงหน้าจอโฮม — จำเป็นกับการใช้งานออฟไลน์ระยะยาว
   useEffect(() => {
@@ -107,17 +148,36 @@ export function AppShell() {
   const pending = (snap?.pending ?? 0) + (snap?.failed ?? 0) + (snap?.conflict ?? 0)
   const offline = snap ? !snap.online : false
 
+  /**
+   * OFF-07 — ค้างเกินจำนวนหรือค้างนานเกินเกณฑ์ ต้องเห็นตั้งแต่แถบบนสุด
+   * ไม่ใช่ต้องเข้าไปหาในศูนย์ซิงค์ เพราะคนหน้างานไม่ได้เปิดหน้านั้นทุกวัน
+   */
+  const overLimit = Boolean(
+    policy &&
+      snap &&
+      (snap.pending > policy.warnPendingOver ||
+        (snap.oldestPendingAt !== null &&
+          Date.now() - snap.oldestPendingAt > policy.warnAgeHours * 3_600_000)),
+  )
+
   return (
     <div className="shell">
       <header className="shell-head">
         <div className="shell-head-row">
-          <img src="/pwa-192.png" alt="" />
-          <div style={{ minWidth: 0 }}>
-            <div className="shell-title">วังชิ้นฟาร์ม</div>
+          <span className="brand-mark">
+            <img src="/logo-96.png" alt="" />
+          </span>
+          <div className="shell-head-main">
+            <div className="shell-title">สหกรณ์การเกษตรวังชิ้น จำกัด</div>
             <div className="shell-sub">
               {account.name} · {ROLE_LABEL[account.role]}
             </div>
           </div>
+          {/* กระดิ่งอยู่คู่กับปุ่มบัญชีตามดีไซน์ กดแล้วไปกล่องแจ้งเตือนโดยตรง */}
+          <Link className="bell" to="/alerts" aria-label={`แจ้งเตือน${unread > 0 ? ` ${unread} รายการ` : ''}`}>
+            <Bell size={18} />
+            {unread > 0 && <span className="dot">{unread > 99 ? '99+' : unread}</span>}
+          </Link>
           <button className="avatar" onClick={() => setMenu(true)} aria-label="บัญชีผู้ใช้">
             {account.name.charAt(0)}
           </button>
@@ -125,7 +185,7 @@ export function AppShell() {
       </header>
 
       <nav className="tabbar">
-        {TABS.map(({ to, label, Icon, end }) => (
+        {tabsFor(account.role).map(({ to, label, Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? 'on' : '')}>
             <Icon strokeWidth={1.8} />
             <span>{label}</span>
@@ -138,19 +198,26 @@ export function AppShell() {
 
       <main className="shell-body">
         {snap && (offline || pending > 0) && (
-          <div className={`statusbar ${offline ? 'offline' : 'online'}`}>
-            {offline ? <WifiOff size={15} /> : <RefreshCw size={15} />}
+          <Link className={`statusbar ${overLimit ? 'alert' : offline ? 'offline' : 'online'}`} to="/sync">
+            {overLimit ? <TriangleAlert size={15} /> : offline ? <WifiOff size={15} /> : <RefreshCw size={15} />}
             <span>
               {offline ? 'ออฟไลน์ — บันทึกลงเครื่องไว้ก่อน' : 'ออนไลน์'}
               {pending > 0 && ` · ค้างส่ง ${pending} รายการ`}
               {snap.oldestPendingAt && ` · เก่าสุด ${age(snap.oldestPendingAt)}`}
+              {overLimit && ' · เกินเกณฑ์ที่ตั้งไว้'}
             </span>
             {!offline && pending > 0 && (
-              <button onClick={() => void sync()} disabled={syncing}>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  void sync()
+                }}
+                disabled={syncing}
+              >
                 {syncing ? 'กำลังส่ง…' : 'ส่งเลย'}
               </button>
             )}
-          </div>
+          </Link>
         )}
 
         {snap && snap.conflict > 0 && (
@@ -162,7 +229,7 @@ export function AppShell() {
 
         {installEvent && !installHidden && (
           <div className="install">
-            <Download size={16} style={{ flex: 'none' }} />
+            <Download size={16} className="ic" />
             <span>ติดตั้งลงหน้าจอโฮมเพื่อใช้งานออฟไลน์ได้เต็มที่</span>
             <button onClick={() => void install()}>ติดตั้ง</button>
             <button className="x" onClick={() => setInstallHidden(true)} aria-label="ปิด">
@@ -183,7 +250,7 @@ export function AppShell() {
               {account.readOnly && ' · ดูอย่างเดียว'}
               {account.isAdmin && ' · ผู้ดูแลระบบ'} · {account.phone}
             </p>
-            <div className="row" style={{ marginTop: 4 }}>
+            <div className="row tight">
               <button
                 className="btn ghost"
                 onClick={() => {
@@ -194,7 +261,7 @@ export function AppShell() {
                 <LogOut size={16} /> ออกจากระบบ
               </button>
             </div>
-            <p style={{ fontSize: 12, color: 'var(--faint)', marginTop: 12 }}>
+            <p className="sheet-foot">
               ข้อมูลที่ยังไม่ได้ส่งขึ้นระบบจะยังอยู่ในเครื่องหลังออกจากระบบ
               และส่งต่อได้เมื่อเข้าสู่ระบบอีกครั้ง
             </p>

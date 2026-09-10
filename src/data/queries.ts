@@ -3,8 +3,8 @@
  * ทุกตัวอ่านจาก IndexedDB ล้วน ไม่แตะเครือข่าย จึงทำงานได้เต็มที่ตอนออฟไลน์
  */
 import { db } from './db'
-import { DEFAULT_PARAMS, goldenPeriod, heatStressIndex, nextHeatWindow } from '../domain/rules'
-import { weatherSeries } from './seed'
+import { inPhase } from '../domain/activities'
+import { DEFAULT_PARAMS, goldenPeriod, nextHeatWindow } from '../domain/rules'
 import type { Animal, BioParams, Kpi, Role, Task } from '../domain/types'
 
 const DAY = 86_400_000
@@ -27,16 +27,33 @@ export interface TaskBuckets {
   later: Task[]
 }
 
-export async function taskBuckets(role: Role, farmIds?: string[], seeAll = false): Promise<TaskBuckets> {
+/**
+ * กล่องงานของผู้ใช้คนหนึ่ง
+ *
+ * ASG-05 — เห็นเฉพาะงานของบทบาทตัวเอง งานที่ระบุชื่อคนอื่นแล้วต้องไม่ปนเข้ามา
+ * และงานที่ระบุชื่อตัวเองต้องมาก่อนงานที่ยังไม่ระบุตัวบุคคลในวันเดียวกัน
+ */
+export async function taskBuckets(
+  role: Role,
+  farmIds?: string[],
+  seeAll = false,
+  userId?: string,
+): Promise<TaskBuckets> {
   const t = Date.now()
   const startOfDay = new Date(t).setHours(0, 0, 0, 0)
   const endOfDay = startOfDay + DAY
 
   let rows = await db.tasks.where('status').anyOf('open', 'overdue', 'escalated').toArray()
-  if (!seeAll) rows = rows.filter((k) => k.assignedRole === role)
+  // เฟสนี้ทำเฉพาะภาค ก งานของภาคอื่นที่ค้างจากข้อมูลชุดเก่าต้องไม่โผล่มา
+  rows = rows.filter((k) => inPhase(k.activityCode))
+  if (!seeAll) {
+    rows = rows.filter((k) => k.assignedRole === role)
+    if (userId) rows = rows.filter((k) => !k.assignedTo || k.assignedTo === userId)
+  }
   if (farmIds?.length) rows = rows.filter((k) => !k.farmId || farmIds.includes(k.farmId))
 
-  rows.sort((a, b) => a.dueAt - b.dueAt)
+  const mine = (k: Task) => (userId && k.assignedTo === userId ? 0 : 1)
+  rows.sort((a, b) => mine(a) - mine(b) || a.dueAt - b.dueAt)
   return {
     overdue: rows.filter((k) => k.dueAt < startOfDay),
     today: rows.filter((k) => k.dueAt >= startOfDay && k.dueAt < endOfDay),
@@ -166,14 +183,6 @@ export async function computeKpis(): Promise<Kpi[]> {
       hint: 'ผสมแล้วแต่ยังไม่ได้ตรวจ',
     },
   ]
-}
-
-/** ค-05 — ดัชนีความเครียดจากความร้อนล่าสุดและย้อนหลัง */
-export function heatStress(days = 14) {
-  return weatherSeries(days).map((d) => ({
-    ...d,
-    thi: heatStressIndex(d.tempMax, d.humidity),
-  }))
 }
 
 // ── ค้นหาโค ──────────────────────────────────────────────────────────────

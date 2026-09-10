@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { Camera, CircleCheck, TriangleAlert, X } from 'lucide-react'
+import { Beef, Camera, CircleCheck, Lightbulb, TriangleAlert, X } from 'lucide-react'
 import type { ActivitySpec, FieldSpec } from '../domain/activities'
 import type { Animal, BioParams, SemenBatch } from '../domain/types'
 import { Card, Empty, Field, List, Note, PageHeader, Pill, Row, SearchBox } from './ui'
@@ -17,6 +17,14 @@ import { saveRecord } from '../data/sync'
 import { applyEffects, closeTask } from '../data/effects'
 import { getParams, searchAnimals } from '../data/queries'
 import { breedingBlockers } from '../domain/rules'
+import {
+  BAND_CHECKS,
+  BAND_LABEL,
+  BAND_TONE,
+  BCS9_LABEL,
+  bcsAdvice,
+  bcsBand,
+} from '../domain/bcs'
 import { compressImage } from '../lib/image'
 import { useAccount } from '../state/session'
 import { bytes } from '../lib/format'
@@ -41,7 +49,7 @@ interface PendingPhoto {
 export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   const nav = useNavigate()
   const [sp] = useSearchParams()
-  const { name, role, readOnly } = useAccount()
+  const { userId, name, role, readOnly } = useAccount()
 
   const taskLocalId = sp.get('task')
   const presetAnimal = sp.get('animal')
@@ -59,19 +67,26 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   const photosRef = useRef<PendingPhoto[]>([])
   photosRef.current = photos
 
+  /** SEC-03 — ฟิลด์บางตัวเป็นของบทบาทเดียว เช่น ช่องยืนยันผลของสัตวบาลใน ก-07 */
+  const fields = useMemo(
+    () => spec.fields.filter((f) => !f.roles || f.roles.includes(role)),
+    [spec, role],
+  )
+
   // ตั้งค่าเริ่มต้นของฟิลด์วันที่/เวลาให้เป็นตอนนี้ เพราะภาคสนามบันทึกทันทีที่ทำ
   useEffect(() => {
     const init: Record<string, unknown> = {}
-    for (const f of spec.fields) {
+    for (const f of fields) {
       if (f.type === 'date') init[f.key] = localNow(false)
       if (f.type === 'datetime') init[f.key] = localNow(true)
       if (f.type === 'bool') init[f.key] = false
+      if (f.default !== undefined) init[f.key] = f.default
       if (f.key === 'actor' || f.key === 'reporter') init[f.key] = name
     }
     setValues(init)
     setDone(null)
     setErrors({})
-  }, [spec.code, name])
+  }, [spec.code, name, fields])
 
   useEffect(() => {
     void getParams().then(setParams)
@@ -93,6 +108,18 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
     () => (animal && params && spec.code === 'ก-08' ? breedingBlockers(animal, params) : []),
     [animal, params, spec.code],
   )
+
+  /**
+   * มติ [29:56] — BCS ของโคเนื้อคือสเกล 9 ระดับ (mockup ของทีมออกแบบเป็น 5)
+   * ค่าสูงสุดจึงมาจาก BioParams ไม่ใช่ตัวเลขในหน้าจอ
+   * ยกเว้นผู้ใช้เลือกสเกลโคนมเอง ซึ่งกำกับไว้ในชื่อของตัวเลือกอยู่แล้ว
+   */
+  const scoreMax = useMemo(() => {
+    const scale = String(values.scale ?? '')
+    const m = scale.match(/1[–-](\d+)/)
+    if (m) return Number(m[1])
+    return params?.bcsScaleMax ?? 9
+  }, [values.scale, params])
 
   async function addPhotos(files: FileList | null) {
     if (!files?.length) return
@@ -120,7 +147,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   function validate(): boolean {
     const next: Record<string, string> = {}
     if (spec.needsAnimal && !animalId) next.__animal = 'ต้องเลือกตัวสัตว์ก่อน'
-    for (const f of spec.fields) {
+    for (const f of fields) {
       if (!f.required) continue
       const v = values[f.key]
       if (f.type === 'bool') continue
@@ -170,7 +197,11 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         retries: 0,
       })
 
-      const effects = await applyEffects(spec.code, values, animalId, params, occurredAt)
+      const effects = await applyEffects(spec.code, values, animalId, params, occurredAt, {
+        userId,
+        name,
+        role,
+      })
       if (taskLocalId) await closeTask(taskLocalId, localId)
 
       photos.forEach((p) => URL.revokeObjectURL(p.url))
@@ -187,11 +218,11 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
       <>
         <PageHeader title={spec.name} sub={spec.code} />
         <Card>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <CircleCheck size={22} style={{ color: 'var(--ok)', flex: 'none', marginTop: 2 }} />
+          <div className="done-head">
+            <CircleCheck size={22} className="ic-ok" />
             <div>
-              <h2 style={{ fontSize: 16 }}>บันทึกลงเครื่องแล้ว</h2>
-              <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 3 }}>
+              <h2>บันทึกลงเครื่องแล้ว</h2>
+              <p className="hint">
                 {spec.code} · {spec.name} — เข้าคิวรอส่งขึ้นเซิร์ฟเวอร์เมื่อมีสัญญาณ
               </p>
             </div>
@@ -199,7 +230,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
 
           {done.messages.length > 0 && (
             <>
-              <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 14 }}>ระบบทำต่อให้แล้ว</p>
+              <p className="subhead">ระบบทำต่อให้แล้ว</p>
               <ul className="derived">
                 {done.messages.map((m) => (
                   <li key={m}>{m}</li>
@@ -234,35 +265,33 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
       <PageHeader title={spec.name} sub={spec.code} />
       <div className="form-head">
         <p>{spec.detail}</p>
-        <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
-          ทำเมื่อ: {spec.trigger}
-        </p>
+        <p className="hint tiny">ทำเมื่อ: {spec.trigger}</p>
       </div>
 
       {spec.needsAnimal && (
         <Card title="ตัวสัตว์" hint="ยืนยันด้วย RFID หรือเบอร์หู">
           {animal ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ flex: 1 }}>
+            <div className="picked">
+              <div className="picked-main">
                 <div className="row-title">{animal.tagNo} · {animal.breed}</div>
                 <div className="row-sub">{animal.rfid}</div>
               </div>
-              <button className="btn ghost" style={{ flex: 'none' }} onClick={() => { setAnimalId(null); setPicking(true) }}>
+              <button className="btn ghost fit" onClick={() => { setAnimalId(null); setPicking(true) }}>
                 เปลี่ยน
               </button>
             </div>
           ) : (
             <AnimalPicker onPick={(a) => { setAnimalId(a.id); setPicking(false) }} open={picking || !animalId} />
           )}
-          {errors.__animal && <p style={{ color: 'var(--crit)', fontSize: 13, marginTop: 8 }}>{errors.__animal}</p>}
+          {errors.__animal && <p className="err">{errors.__animal}</p>}
         </Card>
       )}
 
       {blockers.length > 0 && (
         <Card title="เตือนก่อนบันทึกการผสม">
-          <div style={{ display: 'flex', gap: 9 }}>
-            <TriangleAlert size={19} style={{ color: 'var(--warn)', flex: 'none', marginTop: 2 }} />
-            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13.5 }}>
+          <div className="warn-block">
+            <TriangleAlert size={19} className="ic-warn" />
+            <ul>
               {blockers.map((b) => (
                 <li key={b}>{b}</li>
               ))}
@@ -272,9 +301,9 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         </Card>
       )}
 
-      {spec.fields.length > 0 ? (
+      {fields.length > 0 ? (
         <Card title="รายละเอียดที่ต้องบันทึก">
-          {spec.fields.map((f) => (
+          {fields.map((f) => (
             <FieldInput
               key={f.key}
               field={f}
@@ -282,6 +311,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
               error={errors[f.key]}
               semen={semen}
               photos={photos}
+              scoreMax={scoreMax}
               onChange={(v) => set(f.key, v)}
               onAddPhotos={addPhotos}
               onRemovePhoto={(id) => {
@@ -298,15 +328,6 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
               rows={2}
               value={String(values.note ?? '')}
               onChange={(e) => set('note', e.target.value)}
-              style={{
-                width: '100%',
-                borderRadius: 11,
-                border: '1px solid var(--rule)',
-                background: 'var(--panel)',
-                color: 'var(--ink)',
-                padding: '8px 12px',
-                font: 'inherit',
-              }}
             />
           </Field>
         </Card>
@@ -318,6 +339,10 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         </Card>
       )}
 
+      {spec.code === 'ก-03' && params && Number(values.score) > 0 && (
+        <BcsPanel score={Number(values.score)} params={params} />
+      )}
+
       <Card title="ระบบจะทำอะไรต่อ">
         <ul className="derived">
           {spec.derived.map((d) => (
@@ -326,23 +351,59 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         </ul>
       </Card>
 
-      {spec.fields.length > 0 && readOnly && (
+      {fields.length > 0 && readOnly && (
         <Card>
           <Empty>บัญชีนี้มีสิทธิ์ดูอย่างเดียว จึงบันทึกกิจกรรมนี้ไม่ได้</Empty>
         </Card>
       )}
 
-      {spec.fields.length > 0 && !readOnly && (
+      {fields.length > 0 && !readOnly && (
         <div className="sticky-save">
-          <button className="btn" style={{ width: '100%' }} onClick={() => void submit()} disabled={saving}>
+          <button className="btn full" onClick={() => void submit()} disabled={saving}>
             {saving ? 'กำลังบันทึก…' : 'บันทึก'}
           </button>
-          <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 6 }}>
-            บันทึกได้แม้ไม่มีสัญญาณ ระบบจะส่งขึ้นให้เองเมื่อกลับมาออนไลน์
-          </p>
+          <p className="hint tiny center">บันทึกได้แม้ไม่มีสัญญาณ ระบบจะส่งขึ้นให้เองเมื่อกลับมาออนไลน์</p>
         </div>
       )}
     </>
+  )
+}
+
+/**
+ * แผงอธิบายคะแนน BCS ที่เลือก — บอกว่าคะแนนนี้อยู่กลุ่มไหน คลำอะไรได้บ้าง
+ * และระบบแนะนำอะไรต่อ คำแนะนำเทียบกับเกณฑ์เข้าผสมใน BioParams ไม่ใช่เลขตายตัว
+ */
+function BcsPanel({ score, params }: { score: number; params: BioParams }) {
+  const band = bcsBand(score)
+  const advice = bcsAdvice(score, params)
+  return (
+    <Card>
+      <div className="band-card">
+        <div className="hero-art">
+          <Beef size={40} />
+        </div>
+        <h3>
+          BCS {score.toFixed(1)} · {BAND_LABEL[band]}
+        </h3>
+        <p className="hint">สิ่งที่ควรคลำได้จริงเมื่อโคอยู่ในกลุ่มนี้</p>
+        <div className="band-checks">
+          {BAND_CHECKS[band].map(([part, sign]) => (
+            <div className="band-check" key={part}>
+              <b>{part}</b>
+              <span>{sign}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className={`advice ${advice.tone}`}>
+        <Lightbulb size={17} className="ic" />
+        <div>
+          <b>คำแนะนำอัตโนมัติจากระบบ</b>
+          {advice.text}
+        </div>
+      </div>
+    </Card>
   )
 }
 
@@ -364,6 +425,7 @@ function FieldInput({
   error,
   semen,
   photos,
+  scoreMax,
   onChange,
   onAddPhotos,
   onRemovePhoto,
@@ -373,6 +435,7 @@ function FieldInput({
   error?: string
   semen: SemenBatch[]
   photos: PendingPhoto[]
+  scoreMax: number
   onChange: (v: unknown) => void
   onAddPhotos: (files: FileList | null) => void
   onRemovePhoto: (id: string) => void
@@ -383,10 +446,7 @@ function FieldInput({
   if (f.type === 'photo') {
     return (
       <Field label={f.label} hint="บีบอัดอัตโนมัติก่อนเก็บ">
-        <label
-          className="btn ghost"
-          style={{ display: 'flex', cursor: 'pointer', width: '100%', justifyContent: 'center' }}
-        >
+        <label className="btn ghost photo-pick">
           <Camera size={17} /> ถ่ายหรือเลือกรูป
           <input
             type="file"
@@ -400,26 +460,13 @@ function FieldInput({
         {photos.length > 0 && (
           <div className="thumbs">
             {photos.map((p) => (
-              <div key={p.id} style={{ position: 'relative' }}>
+              <div key={p.id} className="thumb">
                 <img src={p.url} alt="" />
                 <button
                   type="button"
                   onClick={() => onRemovePhoto(p.id)}
                   aria-label="ลบรูป"
-                  style={{
-                    position: 'absolute',
-                    top: 4,
-                    right: 4,
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
-                    border: 0,
-                    background: 'rgba(0,0,0,.6)',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    display: 'grid',
-                    placeItems: 'center',
-                  }}
+                  className="thumb-x"
                 >
                   <X size={13} />
                 </button>
@@ -428,7 +475,7 @@ function FieldInput({
           </div>
         )}
         {photos.length > 0 && (
-          <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+          <p className="hint tiny">
             {photos.length} รูป · รวม {bytes(photos.reduce((s, p) => s + p.bytes, 0))}
           </p>
         )}
@@ -438,41 +485,64 @@ function FieldInput({
 
   if (f.type === 'bool') {
     return (
-      <label
-        className="field"
-        style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, cursor: 'pointer' }}
-      >
+      <label className="field check">
         <input
           type="checkbox"
           checked={value === true}
           onChange={(e) => onChange(e.target.checked)}
-          style={{ width: 20, height: 20, flex: 'none', accentColor: 'var(--brand)' }}
         />
-        <span style={{ margin: 0, color: 'var(--ink)', fontSize: 14 }}>{f.label}</span>
+        <span>{f.label}</span>
       </label>
     )
   }
 
   if (f.type === 'score') {
-    const max = f.max ?? 9
+    const max = scoreMax || f.max || 9
     const min = f.min ?? 1
     const nums = Array.from({ length: max - min + 1 }, (_, i) => min + i)
+    const nine = max === 9
+    const picked = Number(value)
     return (
-      <Field label={label} hint={`สเกล ${min}–${max}`}>
-        <div className="chips" style={{ marginTop: 0 }}>
+      <Field label={label} hint={`เกณฑ์มาตรฐาน ${min}–${max} ${nine ? 'สำหรับโคเนื้อ' : ''}`}>
+        <div className={nine ? 'score-grid' : 'score-grid five'}>
           {nums.map((n) => (
             <button
               key={n}
               type="button"
-              className="chip"
-              aria-pressed={Number(value) === n}
+              className={`score-box ${nine ? bcsBand(n) : ''}`.trim()}
+              aria-pressed={picked === n}
+              aria-label={nine ? `${n} ${BCS9_LABEL[n]}` : String(n)}
               onClick={() => onChange(n)}
-              style={{ minWidth: 42, justifyContent: 'center' }}
             >
               {n}
             </button>
           ))}
         </div>
+
+        {/* คะแนนที่เลือกต้องอ่านออกทันทีโดยไม่ต้องเพ่ง คำกำกับจึงมาอยู่ตรงนี้แทนในช่องเล็ก */}
+        {nine &&
+          (picked >= 1 ? (
+            <div className={`score-pick ${bcsBand(picked)}`}>
+              <span className="big">{picked}</span>
+              <span>
+                <span className="lab">{BCS9_LABEL[picked]}</span>
+                <span className="sub">{BAND_LABEL[bcsBand(picked)]}</span>
+              </span>
+            </div>
+          ) : (
+            <div className="score-pick empty">แตะเลือกคะแนน 1–9 จากแถวด้านบน</div>
+          ))}
+
+        {nine && (
+          <div className="band-row">
+            {(['thin', 'ideal', 'fat'] as const).map((b) => (
+              <Pill key={b} tone={BAND_TONE[b]}>
+                {BAND_LABEL[b]}
+              </Pill>
+            ))}
+          </div>
+        )}
+
         {error && <ErrorText msg={error} />}
       </Field>
     )
@@ -514,20 +584,7 @@ function FieldInput({
   if (f.type === 'textarea') {
     return (
       <Field label={label}>
-        <textarea
-          rows={3}
-          value={String(value ?? '')}
-          onChange={(e) => onChange(e.target.value)}
-          style={{
-            width: '100%',
-            borderRadius: 11,
-            border: '1px solid var(--rule)',
-            background: 'var(--panel)',
-            color: 'var(--ink)',
-            padding: '8px 12px',
-            font: 'inherit',
-          }}
-        />
+        <textarea rows={3} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />
         {error && <ErrorText msg={error} />}
       </Field>
     )
@@ -553,10 +610,10 @@ function FieldInput({
 }
 
 function ErrorText({ msg }: { msg: string }) {
-  return <span style={{ color: 'var(--crit)', fontSize: 12.5, display: 'block', marginTop: 4 }}>{msg}</span>
+  return <span className="err">{msg}</span>
 }
 
-function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; open: boolean }) {
+export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; open: boolean }) {
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Animal[]>([])
 

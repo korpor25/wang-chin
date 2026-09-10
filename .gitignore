@@ -1,4 +1,58 @@
-# Logs
+# ── ที่ติดตั้งและแคชของเครื่องมือ ──
+node_modules
+.pnpm-store
+.cache
+.temp
+.tmp
+
+# ── ผลลัพธ์การ build ──
+dist
+dist-ssr
+dev-dist
+build
+*.tsbuildinfo
+.vite
+.oxlintcache
+
+# ── ตัวแปรสภาพแวดล้อม ──
+# ค่าจริงห้ามขึ้น repo เด็ดขาด — โดยเฉพาะ .env.local ที่ Vercel CLI เขียนโทเคนไว้
+.env
+.env.*
+*.local
+# ยกเว้นไฟล์ตัวอย่าง ที่บอกว่าต้องตั้งตัวแปรอะไรบ้าง แต่ไม่ใส่ค่าจริง
+!.env.example
+
+# ── บริการภายนอก ──
+.vercel
+
+# ── เครื่องมือผู้ช่วยเขียนโค้ด ──
+# ไฟล์ตั้งค่าเฉพาะเครื่องของแต่ละคน ไม่ควรไปโผล่บนเครื่องคนอื่น
+# ส่วนบทสนทนาไม่ได้อยู่ในโฟลเดอร์โปรเจกต์อยู่แล้ว จึงไม่มีทางขึ้น git
+.claude/
+.cursor/
+.aider*
+.continue/
+
+# ── บันทึกการประชุมและไฟล์ทำงานภายใน ──
+# ถอดความการประชุมมีชื่อและข้อมูลของสมาชิกสหกรณ์ เก็บไว้ในเครื่องพอ ไม่ต้องขึ้น repo
+Meeting Transcription*.pdf
+*.transcript.txt
+scratch/
+_local/
+
+# ── ไฟล์โมเดล 3 มิติดิบที่ยังไม่ได้จัดเข้าที่ ──
+# ตัวที่ใช้จริงอยู่ใน public/models/ ส่วนไฟล์ที่โหลดมากองไว้ที่รากไม่ต้องขึ้น repo
+/*.glb
+/*.gltf
+
+# ── ข้อมูลจริงของสหกรณ์ที่ใช้นำเข้า ──
+# ทะเบียนโค ฟาร์ม และเบอร์โทรของสมาชิก เป็นข้อมูลส่วนบุคคล
+data-private/
+*.xlsx
+*.xls
+*.csv
+
+# ── log ──
 logs
 *.log
 npm-debug.log*
@@ -7,27 +61,16 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# ── เอดิเตอร์และระบบปฏิบัติการ ──
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-.vercel
-.env*
-# ยกเว้นไฟล์ตัวอย่าง — บอกว่าต้องตั้งตัวแปรอะไรบ้าง ไม่ใส่ค่าจริง
-!.env.example
-
-# build artifacts
-dev-dist
-*.tsbuildinfo
+.DS_Store
+Thumbs.db
+desktop.ini

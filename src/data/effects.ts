@@ -5,14 +5,18 @@
  * แต่เปลี่ยนสถานะของสัตว์ ตัดสต๊อก และสร้างกำหนดการของรอบถัดไปให้อัตโนมัติ
  */
 import { db, newLocalId } from './db'
+import { enqueue } from './sync'
 import {
   addDays,
+  taskConfirmCalving,
+  taskConfirmHeat,
+  taskInseminate,
   tasksAfterCalving,
   tasksAfterInsemination,
   tasksAfterPregnancy,
   type DerivedTask,
 } from '../domain/rules'
-import type { Animal, BioParams, Task } from '../domain/types'
+import type { Alert, Animal, BioParams, Role, Task } from '../domain/types'
 
 const DAY = 86_400_000
 
@@ -20,6 +24,44 @@ export interface EffectSummary {
   /** ข้อความสั้น ๆ บอกผู้ใช้ว่าระบบทำอะไรต่อให้บ้าง */
   messages: string[]
   tasksCreated: number
+}
+
+/** ผู้ที่กำลังบันทึก — ผลของบางกิจกรรมต่างกันตามบทบาทของผู้บันทึก เช่น ก-07 */
+export interface Actor {
+  userId: string
+  name: string
+  role: Role
+}
+
+/** ส่งแจ้งเตือนถึงบทบาทหนึ่ง (ค-03) พร้อมช่องติดตามผลตอบสนองครบสี่เวลา */
+export async function notify(a: {
+  title: string
+  body: string
+  toRole: Role
+  toUser?: string | null
+  level?: Alert['level']
+  channel?: Alert['channel']
+  taskLocalId?: string | null
+  animalId?: string | null
+  farmId?: string | null
+}) {
+  await db.alerts.add({
+    localId: newLocalId('alert'),
+    taskLocalId: a.taskLocalId ?? null,
+    animalId: a.animalId ?? null,
+    farmId: a.farmId ?? null,
+    title: a.title,
+    body: a.body,
+    level: a.level ?? 'info',
+    channel: a.channel ?? (a.toRole === 'farmer' ? 'line' : 'in-app'),
+    toRole: a.toRole,
+    toUser: a.toUser ?? null,
+    sentAt: Date.now(),
+    readAt: null,
+    ackAt: null,
+    escalatedAt: null,
+    resolvedAt: null,
+  })
 }
 
 function toTasks(derived: DerivedTask[], animal: Animal | null): Task[] {
@@ -57,14 +99,18 @@ export async function applyEffects(
   animalId: string | null,
   params: BioParams,
   occurredAt: number,
+  actor: Actor,
 ): Promise<EffectSummary> {
   const out: EffectSummary = { messages: [], tasksCreated: 0 }
   const animal = animalId ? ((await db.animals.get(animalId)) ?? null) : null
 
-  const addTasks = async (derived: DerivedTask[]) => {
+  const addTasks = async (derived: DerivedTask[]): Promise<Task[]> => {
     const rows = toTasks(derived, animal)
     await db.tasks.bulkAdd(rows)
+    // งานที่ระบบสร้างต้องเข้าคิวซิงค์เหมือนบันทึกอื่น ไม่งั้นเจ้าหน้าที่คนอื่นไม่เห็น
+    for (const r of rows) await enqueue('tasks', 'create', r.localId, 400)
     out.tasksCreated += rows.length
+    return rows
   }
 
   const patch = async (p: Partial<Animal>) => {
@@ -75,7 +121,20 @@ export async function applyEffects(
   switch (activityCode) {
     // ── การคลอด ──
     case 'ก-01': {
-      out.messages.push('ส่งให้สัตวบาลยืนยันการคลอด')
+      // การแจ้งของเกษตรกรต้องกลายเป็นงานของสัตวบาลจริง ๆ ไม่ใช่แค่ข้อความตอบกลับ
+      const foundAt = ts(payload.foundAt, occurredAt)
+      const reporter = String(payload.reporter ?? actor.name)
+      const [task] = await addTasks([taskConfirmCalving(foundAt, reporter)])
+      await notify({
+        title: 'มีการแจ้งการคลอด รอยืนยัน',
+        body: `${animal ? `${animal.tagNo} · ` : ''}แจ้งโดย ${reporter} เมื่อ ${new Date(foundAt).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} น.`,
+        toRole: 'husbandry',
+        level: 'warn',
+        taskLocalId: task?.localId ?? null,
+        animalId,
+        farmId: animal?.farmId ?? null,
+      })
+      out.messages.push('สร้างงาน "ยืนยันการคลอด" ให้สัตวบาลแล้ว พร้อมส่งแจ้งเตือน')
       break
     }
     case 'ก-02': {
@@ -120,19 +179,33 @@ export async function applyEffects(
       await patch({ lastHeatAt: observedAt })
       const from = new Date(observedAt + params.goldenPeriodFromHours * 3_600_000)
       const to = new Date(observedAt + params.goldenPeriodToHours * 3_600_000)
-      const fmt = (d: Date) => d.toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      const fmt = (d: Date) =>
+        d.toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
       out.messages.push(`ช่วงผสมที่เหมาะสม ${fmt(from)} – ${fmt(to)} น.`)
-      await addTasks([
-        {
-          activityCode: 'ก-08',
-          title: 'ผสมเทียมภายในช่วงที่เหมาะสม',
-          dueAt: observedAt + params.goldenPeriodFromHours * 3_600_000,
-          toleranceDays: 1,
-          assignedRole: 'husbandry',
-          priority: 'high',
-          derivedFrom: `พบอาการเป็นสัด + ${params.goldenPeriodFromHours} ชม.`,
-        },
-      ])
+
+      // เกษตรกรแจ้ง → ต้องผ่านการยืนยันของสัตวบาลก่อน ว่าเป็นสัดจริงหรือสัดหลอก
+      if (actor.role === 'farmer') {
+        const [task] = await addTasks([taskConfirmHeat(observedAt, params, actor.name)])
+        await notify({
+          title: 'เกษตรกรแจ้งอาการเป็นสัด รอยืนยัน',
+          body: `${animal ? `${animal.tagNo} · ` : ''}ช่วงผสมที่เหมาะสม ${fmt(from)} – ${fmt(to)} น.`,
+          toRole: 'husbandry',
+          level: 'warn',
+          taskLocalId: task?.localId ?? null,
+          animalId,
+          farmId: animal?.farmId ?? null,
+        })
+        out.messages.push('ส่งให้สัตวบาลยืนยันก่อน ระบบยังไม่สร้างงานผสมจนกว่าจะยืนยันว่าเป็นสัดจริง')
+        break
+      }
+
+      // สัตวบาลบันทึกเอง — ถ้าตัดสินว่าเป็นสัดหลอกก็จบรอบนี้ ไม่ต้องสร้างงานผสม
+      const verdict = String(payload.verdict ?? '')
+      if (verdict === 'สัดหลอกหรือไม่ชัด') {
+        out.messages.push('บันทึกว่าไม่ใช่สัดจริง — ไม่สร้างงานผสม และคงการเฝ้าระวังตามวงรอบไว้เหมือนเดิม')
+        break
+      }
+      await addTasks([taskInseminate(observedAt, params)])
       break
     }
 
@@ -148,7 +221,19 @@ export async function applyEffects(
           await db.semen.update(batchId, { strawsUsed: batch.strawsUsed + 1 })
           const left = batch.strawsIn - batch.strawsUsed - 1
           out.messages.push(`ตัดสต๊อก ${batch.lotNo} เหลือ ${left} หลอด`)
-          if (left <= 10) out.messages.push('สต๊อกล็อตนี้ใกล้หมด — แจ้งเจ้าหน้าที่สหกรณ์แล้ว')
+          // เกณฑ์เตือนมาจากพารามิเตอร์ชุดเดียวกับรหัสสีในหน้าคลัง จะได้ไม่เพี้ยนกันคนละที่
+          if (left <= params.semenWarnStraws) {
+            const crit = left <= params.semenCritStraws
+            await notify({
+              title: `น้ำเชื้อล็อต ${batch.lotNo} ${crit ? 'เหลือน้อยระดับวิกฤต' : 'ใกล้หมด'}`,
+              body: `คงเหลือ ${left} หลอด · เกณฑ์เฝ้าระวัง ${params.semenWarnStraws} หลอด · เกณฑ์วิกฤต ${params.semenCritStraws} หลอด`,
+              toRole: 'coop',
+              level: crit ? 'critical' : 'warn',
+            })
+            out.messages.push(
+              `สต๊อกล็อตนี้${crit ? 'เหลือน้อยระดับวิกฤต' : 'ใกล้หมด'} — แจ้งเจ้าหน้าที่สหกรณ์แล้ว`,
+            )
+          }
         }
       }
       out.messages.push(`นัดตรวจครรภ์ในอีก ${params.pregnancyCheckDays} วัน`)
@@ -194,100 +279,28 @@ export async function applyEffects(
       break
     }
 
-    // ── รับน้ำเชื้อเข้าคลัง ──
-    case 'ข-01': {
-      const straws = Number(payload.straws) || 0
-      const id = newLocalId('semen')
-      const collectedAt = ts(payload.collectedAt, occurredAt)
-      await db.semen.add({
-        id,
-        lotNo: String(payload.lotNo ?? ''),
-        sireCode: String(payload.sireCode ?? ''),
-        sireName: String(payload.sireName ?? ''),
-        breed: String(payload.breed ?? ''),
-        bloodPct: Number(payload.bloodPct) || 100,
-        collectedAt,
-        expiresAt: ts(payload.expiresAt, addDays(collectedAt, 1460)),
-        tankId: String(payload.tankId ?? ''),
-        canister: String(payload.canister ?? ''),
-        strawsIn: straws,
-        strawsUsed: 0,
-        motilityCert: Number(payload.motilityCert) || 0,
-        motilityLast: null,
-        lastQcAt: null,
-        nextQcAt: addDays(occurredAt, 180),
-        status: 'ok',
-      })
-      out.messages.push(`เพิ่มล็อตใหม่ ${payload.lotNo} จำนวน ${straws} หลอดเข้าคลัง`)
-      await addTasks([
-        {
-          activityCode: 'ข-02',
-          title: `ตรวจคุณภาพน้ำเชื้อ ${payload.lotNo}`,
-          dueAt: addDays(occurredAt, 180),
-          toleranceDays: 14,
-          assignedRole: 'coop',
-          priority: 'normal',
-          derivedFrom: 'รับเข้า + 6 เดือน',
-        },
-      ])
-      break
-    }
-
-    // ── ตรวจคุณภาพน้ำเชื้อ ──
-    case 'ข-02': {
-      const batchId = String(payload.semenBatchId ?? '')
-      const verdict = String(payload.verdict ?? '')
-      if (batchId) {
-        await db.semen.update(batchId, {
-          motilityLast: Number(payload.motilityPost) || null,
-          lastQcAt: occurredAt,
-          nextQcAt: ts(payload.nextQcAt, addDays(occurredAt, 180)),
-          status: verdict === 'ห้ามใช้' ? 'rejected' : verdict === 'เฝ้าระวัง' ? 'watch' : 'ok',
+    // ── เตรียมโคและคอกคลอด ──
+    case 'ก-11': {
+      const willDo = payload.willDo === true
+      const obstacle = String(payload.obstacle ?? '').trim()
+      out.messages.push(
+        willDo
+          ? 'บันทึกการตอบรับแจ้งเตือนแล้ว — นับเข้าอัตราการตอบสนองของฟาร์มนี้'
+          : 'บันทึกว่ายังดำเนินการไม่ได้ — ส่งให้เจ้าหน้าที่สหกรณ์ช่วยตาม',
+      )
+      if (!willDo || obstacle) {
+        await notify({
+          title: 'เกษตรกรแจ้งอุปสรรคในการเตรียมคอกคลอด',
+          body: `${animal ? `${animal.tagNo} · ` : ''}${obstacle || 'ยังยืนยันไม่ได้'} · แจ้งโดย ${actor.name}`,
+          toRole: 'coop',
+          level: 'warn',
+          animalId,
+          farmId: animal?.farmId ?? null,
         })
-        out.messages.push(
-          verdict === 'ห้ามใช้'
-            ? 'ล็อตนี้ถูกล็อกไม่ให้เลือกใช้ในการผสมแล้ว'
-            : `อัปเดตสถานะล็อตเป็น "${verdict}"`,
-        )
       }
       break
     }
 
-    // ── ไนโตรเจนเหลว ──
-    case 'ข-03': {
-      const tankId = String(payload.tankId ?? '')
-      const level = Number(payload.levelCm)
-      const tank = await db.tanks.get(tankId)
-      if (tank && Number.isFinite(level)) {
-        const weeks = Math.max(0.5, (occurredAt - tank.lastCheckAt) / (7 * DAY))
-        const rate = Math.max(0, (tank.levelCm - level) / weeks)
-        await db.tanks.update(tankId, {
-          levelCm: level,
-          lastCheckAt: occurredAt,
-          evaporationCmPerWeek: Number(rate.toFixed(2)),
-          status: level < 8 ? 'critical' : rate > 3 ? 'watch' : 'ok',
-        })
-        out.messages.push(`อัตราการระเหย ${rate.toFixed(1)} ซม./สัปดาห์`)
-        if (level < 8) out.messages.push('ระดับต่ำวิกฤต — แจ้งเตือนเจ้าหน้าที่ให้เติมด่วน')
-      }
-      break
-    }
-
-    // ── กลุ่มอาหาร ──
-    case 'ข-04': {
-      out.messages.push('บันทึกช่วงเวลาที่โคตัวนี้อยู่ในกลุ่มและสูตรอาหารแล้ว')
-      break
-    }
-
-    // ── แท็ก RFID ──
-    case 'ข-06': {
-      const newTag = String(payload.newTag ?? '')
-      if (newTag && animal) {
-        await patch({ rfid: newTag })
-        out.messages.push(`ผูกแท็กใหม่ ${newTag} กับประวัติเดิมแล้ว`)
-      }
-      break
-    }
   }
 
   return out
@@ -302,6 +315,11 @@ export async function closeTask(taskLocalId: string, recordLocalId: string) {
     doneAt: Date.now(),
     doneRecordLocalId: recordLocalId,
   })
-  const alert = await db.alerts.where('localId').equals(task.localId).first()
-  if (alert?.id) await db.alerts.update(alert.id, { resolvedAt: Date.now() })
+  await enqueue('tasks', 'update', task.localId, 300)
+  // แจ้งเตือนของงานใบนี้ผูกด้วย taskLocalId ปิดเรื่องพร้อมกันเพื่อให้ ALR-02 ครบสี่เวลา
+  const alerts = await db.alerts.where('taskLocalId').equals(task.localId).toArray()
+  const now = Date.now()
+  for (const a of alerts) {
+    if (a.id && !a.resolvedAt) await db.alerts.update(a.id, { resolvedAt: now })
+  }
 }

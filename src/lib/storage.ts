@@ -40,12 +40,3 @@ export async function requestPersist(): Promise<boolean> {
   return navigator.storage.persist()
 }
 
-/** ตรวจว่ากำลังรันเป็นแอปที่ติดตั้งแล้ว (โหมด standalone) หรือเปิดในแท็บเบราว์เซอร์ */
-export function isStandalone(): boolean {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.matchMedia('(display-mode: fullscreen)').matches ||
-    // iOS Safari
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  )
-}

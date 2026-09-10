@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react'
 import { ArrowLeft, ChevronRight, Search } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
+import type { IconType } from './activityIcon'
 
 export function Card({
   title,
@@ -17,8 +18,8 @@ export function Card({
   return (
     <section className="card">
       {(title || action) && (
-        <header style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <header>
+          <div className="card-head-main">
             {title && <h2>{title}</h2>}
             {hint && <p>{hint}</p>}
           </div>
@@ -30,9 +31,20 @@ export function Card({
   )
 }
 
-export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
+export function Stat({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string
+  value: ReactNode
+  sub?: string
+  /** ระบายสีช่องตามความหมายของตัวเลข ตามแถวสถิติในดีไซน์ */
+  tone?: Tone
+}) {
   return (
-    <div className="stat">
+    <div className={tone ? `stat ${tone}` : 'stat'}>
       <dt>{label}</dt>
       <dd>
         {value}
@@ -42,11 +54,11 @@ export function Stat({ label, value, sub }: { label: string; value: ReactNode; s
   )
 }
 
-export function Stats({ children }: { children: ReactNode }) {
-  return <dl className="stats">{children}</dl>
+export function Stats({ children, quad }: { children: ReactNode; quad?: boolean }) {
+  return <dl className={quad ? 'stats quad' : 'stats'}>{children}</dl>
 }
 
-export type Tone = 'ok' | 'warn' | 'crit' | 'mute'
+export type Tone = 'ok' | 'warn' | 'crit' | 'info' | 'mute'
 
 export function Pill({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`pill ${tone}`}>{children}</span>
@@ -57,7 +69,7 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
     <label className="field">
       <span>
         {label}
-        {hint && <em style={{ fontStyle: 'normal', color: 'var(--faint)' }}> · {hint}</em>}
+        {hint && <em className="field-hint"> · {hint}</em>}
       </span>
       {children}
     </label>
@@ -72,7 +84,7 @@ export function KeyValues({ items }: { items: Array<[string, ReactNode]> }) {
   return (
     <dl className="kv">
       {items.map(([k, v]) => (
-        <div key={k} style={{ display: 'contents' }}>
+        <div key={k} className="kv-pair">
           <dt>{k}</dt>
           <dd>{v}</dd>
         </div>
@@ -129,12 +141,81 @@ export function List({ children }: { children: ReactNode }) {
   return <ul className="list">{children}</ul>
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="empty">{children}</p>
+/**
+ * การ์ดขั้นตอนแบบตาราง — ไอคอน รหัสกิจกรรม ชื่อ และคำกำกับสั้น ๆ
+ * ใบที่ระบบชี้ว่าควรทำก่อนให้ส่ง active มา จะได้ขอบและพื้นสีของบทบาทนั้น
+ */
+export function Tile({
+  to,
+  Icon,
+  code,
+  label,
+  note,
+  tone,
+  active,
+}: {
+  to: string
+  Icon: IconType
+  code?: string
+  label: string
+  note?: string
+  tone?: 'warn' | 'info'
+  active?: boolean
+}) {
+  return (
+    <Link className={active ? 'tile on' : 'tile'} to={to}>
+      <span className={tone ? `tile-icon ${tone}` : 'tile-icon'}>
+        <Icon size={19} />
+      </span>
+      {code && <span className="code">{code}</span>}
+      <span className="tile-label">{label}</span>
+      {note && <span className="tile-note">{note}</span>}
+    </Link>
+  )
 }
 
-export function GroupHead({ children }: { children: ReactNode }) {
-  return <h3 className="group-head">{children}</h3>
+export function TileGrid({ children }: { children: ReactNode }) {
+  return <div className="tile-grid">{children}</div>
+}
+
+/**
+ * กิจกรรมหนึ่งรายการแบบเรียงลงมา — ไอคอน รหัส ชื่อ และเงื่อนไขที่ต้องทำ
+ * ใช้แทนการ์ดตารางเมื่อมีหลายรายการ เพราะชื่อกิจกรรมยาวเกินกว่าจะบีบลงช่องเล็ก
+ */
+export function ActRow({
+  to,
+  Icon,
+  code,
+  name,
+  sub,
+  active,
+}: {
+  to: string
+  Icon: IconType
+  code: string
+  name: string
+  sub?: string
+  active?: boolean
+}) {
+  return (
+    <Link className={active ? 'act on' : 'act'} to={to}>
+      <span className="act-icon">
+        <Icon size={20} />
+      </span>
+      <span className="act-main">
+        <span className="act-name">
+          <span className="code">{code}</span>
+          {name}
+        </span>
+        {sub && <span className="act-sub">{sub}</span>}
+      </span>
+      <ChevronRight size={17} className="chev" />
+    </Link>
+  )
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <p className="empty">{children}</p>
 }
 
 export function SearchBox({
@@ -184,65 +265,6 @@ export function Chips<T extends string>({
   )
 }
 
-export function KpiCard({
-  label,
-  value,
-  unit,
-  target,
-  hint,
-  higherIsBetter = true,
-}: {
-  label: string
-  value: number
-  unit: string
-  target: number | null
-  hint?: string
-  higherIsBetter?: boolean
-}) {
-  const good = target === null ? null : higherIsBetter ? value >= target : value <= target
-  return (
-    <div className="kpi">
-      <div className="lab">{label}</div>
-      <div className="val">
-        {value.toLocaleString('th-TH')} <small>{unit}</small>
-      </div>
-      {target !== null && (
-        <div className={`tgt ${good ? 'good' : 'bad'}`}>
-          เป้าหมาย {target.toLocaleString('th-TH')} {unit} · {good ? 'ถึงเป้า' : 'ต่ำกว่าเป้า'}
-        </div>
-      )}
-      {hint && <div className="tgt" style={{ color: 'var(--faint)' }}>{hint}</div>}
-    </div>
-  )
-}
-
-/** กราฟแท่งเล็กสำหรับดูแนวโน้ม ไม่ต้องพึ่งไลบรารีชาร์ต */
-export function Spark({
-  values,
-  tones,
-  labels,
-}: {
-  values: number[]
-  tones?: Array<Tone | ''>
-  labels?: string[]
-}) {
-  const max = Math.max(1, ...values)
-  const min = Math.min(...values)
-  const span = Math.max(1, max - min)
-  return (
-    <div className="spark">
-      {values.map((v, i) => (
-        <i
-          key={i}
-          className={tones?.[i] ?? ''}
-          style={{ height: `${15 + ((v - min) / span) * 85}%` }}
-          title={labels?.[i] ?? String(v)}
-        />
-      ))}
-    </div>
-  )
-}
-
 /** หัวหน้าเพจย่อย พร้อมปุ่มย้อนกลับแบบแอปทั่วไป */
 export function PageHeader({ title, sub, back = true }: { title: string; sub?: string; back?: boolean }) {
   const nav = useNavigate()
@@ -253,7 +275,7 @@ export function PageHeader({ title, sub, back = true }: { title: string; sub?: s
           <ArrowLeft size={18} />
         </button>
       )}
-      <div style={{ minWidth: 0 }}>
+      <div className="page-head-main">
         <h1>{title}</h1>
         {sub && <p>{sub}</p>}
       </div>

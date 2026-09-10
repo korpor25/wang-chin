@@ -8,7 +8,10 @@ import { DEFAULT_PARAMS, PARAM_LABEL, PARAM_UNIT } from '../domain/rules'
 import { getParams, saveParams } from '../data/queries'
 import { db, writeAudit, type AuditEntry } from '../data/db'
 import { seedIfEmpty } from '../data/seed'
-import { dateTime, num } from '../lib/format'
+import { EMPTY_ESTIMATE, estimate, isPersisted, requestPersist, type Estimate } from '../lib/storage'
+import { useAccount } from '../state/session'
+import { bytes, dateTime, num } from '../lib/format'
+import { ROLE_LABEL } from '../domain/types'
 import type { BioParams } from '../domain/types'
 
 type Tab = 'params' | 'import' | 'audit' | 'data'
@@ -35,6 +38,8 @@ const PARAM_ORDER: Array<keyof BioParams> = [
   'alertLeadDays',
   'escalateAfterDays',
   'estrusWindowHours',
+  'semenWarnStraws',
+  'semenCritStraws',
 ]
 
 /** คอลัมน์ที่ระบบรองรับตอนนำเข้าจากสเปรดชีต */
@@ -51,7 +56,10 @@ const IMPORT_TARGETS = [
 ]
 
 export function Settings() {
+  const account = useAccount()
   const [tab, setTab] = useState<Tab>('params')
+  const [persisted, setPersisted] = useState<boolean | null>(null)
+  const [space, setSpace] = useState<Estimate>(EMPTY_ESTIMATE)
   const [params, setParams] = useState<BioParams | null>(null)
   const [saved, setSaved] = useState(false)
   const [audit, setAudit] = useState<AuditEntry[]>([])
@@ -71,6 +79,8 @@ export function Settings() {
       ])
       setCounts({ farms, animals, records, tasks, alerts, photos })
     })()
+    void isPersisted().then(setPersisted)
+    void estimate().then(setSpace)
   }, [tab])
 
   async function save() {
@@ -79,7 +89,7 @@ export function Settings() {
     await saveParams(params)
     // การเปลี่ยนพารามิเตอร์ต้องเก็บค่าเดิมไว้เสมอ เพื่อเทียบผลก่อน/หลังตาม ง-02
     await writeAudit({
-      actor: 'ผู้ดูแลระบบ',
+      actor: `${account.name} (${ROLE_LABEL[account.role]})`,
       action: 'แก้ไขค่าพารามิเตอร์ชีววิทยา',
       target: 'bioParams',
       before,
@@ -161,17 +171,7 @@ export function Settings() {
                   parseCsv(e.target.value)
                 }}
                 placeholder="rfid,tagNo,breed,farmCode&#10;900100000001,WC0001,บราห์มัน,WC-001"
-                style={{
-                  width: '100%',
-                  borderRadius: 11,
-                  border: '1px solid var(--rule)',
-                  background: 'var(--panel)',
-                  color: 'var(--ink)',
-                  padding: '8px 12px',
-                  font: 'inherit',
-                  fontFamily: 'var(--mono)',
-                  fontSize: 12.5,
-                }}
+                className="textarea-code"
               />
             </Field>
           </Card>
@@ -261,6 +261,34 @@ export function Settings() {
             <Stat label="แจ้งเตือน" value={num(counts.alerts ?? 0)} />
             <Stat label="รูป" value={num(counts.photos ?? 0)} />
           </Stats>
+
+          {/* OFF-08 — ถ้าไม่ได้สิทธิ์นี้ ระบบลบข้อมูลงานทิ้งเองได้เมื่อพื้นที่ใกล้เต็ม */}
+          <Stats>
+            <Stat
+              label="การเก็บข้อมูลถาวร"
+              value={persisted === null ? '—' : persisted ? 'ได้รับสิทธิ์' : 'ยังไม่ได้'}
+            />
+            <Stat label="ใช้พื้นที่ไป" value={space.supported ? bytes(space.usage) : '—'} />
+            <Stat label="โควตาของเครื่อง" value={space.supported ? bytes(space.quota) : '—'} />
+          </Stats>
+          {persisted === false && (
+            <div className="row">
+              <button
+                className="btn ghost"
+                onClick={async () => {
+                  const ok = await requestPersist()
+                  setPersisted(ok)
+                }}
+              >
+                ขอสิทธิ์เก็บข้อมูลถาวร
+              </button>
+            </div>
+          )}
+          <Note>
+            เบราว์เซอร์อนุมัติสิทธิ์นี้ให้เองเมื่อผู้ใช้ติดตั้งแอปลงโฮมสกรีนหรือเข้าใช้บ่อยพอ
+            ถ้ายังไม่ได้ ข้อมูลที่ยังไม่ถูกส่งขึ้นระบบอยู่ในสถานะที่เครื่องลบทิ้งได้เมื่อพื้นที่ใกล้เต็ม
+          </Note>
+
           <div className="row">
             <button
               className="btn ghost"

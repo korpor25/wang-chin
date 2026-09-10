@@ -5,18 +5,34 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { Card, Chips, Empty, List, Note, PageHeader, Pill, Row, Stat, Stats } from '../components/ui'
+import { CalendarDays, ListChecks, MapPin } from 'lucide-react'
+import { Card, Chips, Empty, Field, Note, PageHeader, Pill, Stat, Stats } from '../components/ui'
 import { db } from '../data/db'
+import { coopEvents, postCoopEvent } from '../data/tasks'
 import { useAccount } from '../state/session'
 import { dateTime, num, pct } from '../lib/format'
-import type { Alert, Farm, User } from '../domain/types'
+import { ROLE_LABEL } from '../domain/types'
+import type { Alert, CoopEvent, Role } from '../domain/types'
 
 type View = 'inbox' | 'ack' | 'escalated' | 'all'
+
+/**
+ * ALR-01 — สามอย่างนี้ต้องแยกกันให้ขาด เพราะเรียกร้องจากผู้ใช้ไม่เหมือนกัน
+ *   งาน (Task)            ต้องลงมือทำแล้วบันทึกผล → อยู่หน้า "งานของฉัน"
+ *   แจ้งเตือน (Alert)     รับทราบแล้วไปที่งาน     → แท็บนี้
+ *   กิจกรรมสหกรณ์ (Event) รับทราบเฉย ๆ            → แท็บแยกด้านล่าง
+ */
+type Section = 'alerts' | 'events'
+
+const SECTIONS: Array<{ value: Section; label: string }> = [
+  { value: 'alerts', label: 'แจ้งเตือน' },
+  { value: 'events', label: 'กิจกรรมสหกรณ์' },
+]
 
 const OPTIONS: Array<{ value: View; label: string }> = [
   { value: 'inbox', label: 'ยังไม่ตอบรับ' },
   { value: 'ack', label: 'ยืนยันแล้ว' },
-  { value: 'escalated', label: 'ถูกยกระดับ' },
+  { value: 'escalated', label: 'ค้างนาน' },
   { value: 'all', label: 'ทั้งหมด' },
 ]
 
@@ -25,13 +41,17 @@ const LEVEL_LABEL = { info: 'ทั่วไป', warn: 'สำคัญ', criti
 const CHANNEL_LABEL = { 'in-app': 'ในแอป', line: 'LINE', sms: 'SMS' } as const
 
 export function Alerts() {
-  const { role, isAdmin } = useAccount()
+  const { userId, role, isAdmin } = useAccount()
+  const [section, setSection] = useState<Section>('alerts')
   const [view, setView] = useState<View>('inbox')
   const [rows, setRows] = useState<Alert[]>([])
   const [all, setAll] = useState<Alert[]>([])
 
   const load = useCallback(async () => {
-    const mine = await db.alerts.filter((a) => a.toRole === role || isAdmin).toArray()
+    // แจ้งเตือนที่ระบุตัวบุคคล (เช่น การมอบหมายงาน) ต้องไม่โผล่ในกล่องของเพื่อนร่วมบทบาท
+    const mine = await db.alerts
+      .filter((a) => (a.toRole === role || isAdmin) && (!a.toUser || a.toUser === userId))
+      .toArray()
     mine.sort((a, b) => b.sentAt - a.sentAt)
     setAll(mine)
     setRows(
@@ -43,7 +63,7 @@ export function Alerts() {
             ? mine.filter((a) => a.escalatedAt)
             : mine,
     )
-  }, [role, isAdmin, view])
+  }, [userId, role, isAdmin, view])
 
   useEffect(() => {
     void load()
@@ -67,7 +87,22 @@ export function Alerts() {
 
   return (
     <>
-      <PageHeader title="แจ้งเตือน" sub="รายการที่ส่งถึงคุณ" />
+      <PageHeader title="แจ้งเตือน" sub="รายการที่ส่งถึงคุณ และประกาศของสหกรณ์" />
+      <Card>
+        <Chips value={section} options={SECTIONS} onChange={setSection} />
+        <Note>
+          <b>แจ้งเตือน</b> คือสิ่งที่ต้องรับทราบแล้วไปทำงานต่อ ส่วน <b>กิจกรรมสหกรณ์</b> คือประกาศที่รับทราบเฉย ๆ
+          — งานที่ต้องลงมือทำแล้วบันทึกผลอยู่ที่หน้า{' '}
+          <Link to="/tasks" className="link-more">
+            <ListChecks size={13} className="ic-inline" /> งานของฉัน
+          </Link>
+        </Note>
+      </Card>
+
+      {section === 'events' && <EventsSection />}
+
+      {section === 'alerts' && (
+      <>
       <Card hint="ระบบส่งล่วงหน้าตามกฎของแต่ละบทบาท">
         <Stats>
           <Stat label="ส่งแล้ว" value={num(sent)} sub="ครั้ง" />
@@ -85,105 +120,220 @@ export function Alerts() {
         {rows.length === 0 ? (
           <Empty>ไม่มีรายการ</Empty>
         ) : (
-          <List>
-            {rows.slice(0, 80).map((a) => (
-              <li key={a.localId}>
-                <div style={{ padding: '11px 2px', borderTop: 0 }}>
-                  <div className="row-title">
-                    <Pill tone={LEVEL_TONE[a.level]}>{LEVEL_LABEL[a.level]}</Pill>
-                    {a.title}
-                    {!a.readAt && <Pill tone="warn">ยังไม่อ่าน</Pill>}
-                    {a.escalatedAt && <Pill tone="crit">ยกระดับแล้ว</Pill>}
-                  </div>
-                  <div className="row-sub">
-                    {a.body} · ส่ง {dateTime(a.sentAt)} ทาง {CHANNEL_LABEL[a.channel]}
-                  </div>
-                  <div className="row" style={{ marginTop: 8 }}>
-                    {!a.ackAt && (
-                      <button className="btn ghost" onClick={() => void ack(a)}>
-                        ยืนยันจะปฏิบัติ
-                      </button>
-                    )}
-                    {!a.readAt && (
-                      <button className="btn ghost" onClick={() => void markRead(a)}>
-                        ทำเครื่องหมายว่าอ่านแล้ว
-                      </button>
-                    )}
-                    {a.animalId && (
-                      <Link className="btn ghost" to={`/animals/${a.animalId}`}>
-                        ดูโค
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </List>
+          rows.slice(0, 80).map((a) => (
+            <div className="lot" key={a.localId}>
+              <div className="lot-head">
+                <Pill tone={LEVEL_TONE[a.level]}>{LEVEL_LABEL[a.level]}</Pill>
+                <span className="lot-left">{dateTime(a.sentAt)}</span>
+              </div>
+              <div className="lot-name">
+                {a.title}
+                {!a.readAt && ' '}
+                {!a.readAt && <Pill tone="warn">ยังไม่อ่าน</Pill>}
+                {a.escalatedAt && ' '}
+                {a.escalatedAt && <Pill tone="crit">ค้างนาน</Pill>}
+              </div>
+              <div className="lot-meta">
+                {a.body} · ส่งทาง {CHANNEL_LABEL[a.channel]}
+              </div>
+              <div className="row snug">
+                {!a.ackAt && (
+                  <button className="btn chiplike" onClick={() => void ack(a)}>
+                    ยืนยันจะปฏิบัติ <span className="go">→</span>
+                  </button>
+                )}
+                {!a.readAt && (
+                  <button className="btn ghost chiplike" onClick={() => void markRead(a)}>
+                    อ่านแล้ว
+                  </button>
+                )}
+                {a.animalId && (
+                  <Link className="btn ghost chiplike" to={`/animals/${a.animalId}`}>
+                    ดูโค <span className="go">→</span>
+                  </Link>
+                )}
+              </div>
+            </div>
+          ))
         )}
       </Card>
+      </>
+      )}
     </>
   )
 }
 
-/** ทะเบียนฟาร์มและสมาชิก */
-export function Farms() {
-  const [farms, setFarms] = useState<Farm[]>([])
-  const [counts, setCounts] = useState<Record<string, number>>({})
-  const [users, setUsers] = useState<User[]>([])
+/** กิจกรรมสหกรณ์ — ประกาศที่ผู้ใช้แค่รับทราบ ไม่มีงานให้ปิด (ALR-01) */
+function EventsSection() {
+  const account = useAccount()
+  const [rows, setRows] = useState<CoopEvent[]>([])
+  const [composing, setComposing] = useState(false)
+  const canPost = account.role === 'coop' && !account.readOnly
+
+  const load = useCallback(async () => {
+    setRows(await coopEvents(account.role))
+  }, [account.role])
 
   useEffect(() => {
-    void (async () => {
-      const [f, animals, u] = await Promise.all([db.farms.toArray(), db.animals.toArray(), db.users.toArray()])
-      setFarms(f)
-      setUsers(u)
-      const c: Record<string, number> = {}
-      for (const a of animals) c[a.farmId] = (c[a.farmId] ?? 0) + 1
-      setCounts(c)
-    })()
-  }, [])
+    void load()
+  }, [load])
+
+  const upcoming = rows.filter((e) => (e.endAt ?? e.startAt) >= Date.now())
+  const past = rows.filter((e) => (e.endAt ?? e.startAt) < Date.now())
 
   return (
     <>
-      <PageHeader title="ฟาร์มและสมาชิก" />
-      <Card title="ฟาร์มสมาชิก" hint={`${num(farms.length)} แห่ง`}>
-        <List>
-          {farms.map((f) => (
-            <Row
-              key={f.id}
-              to={`/animals?farm=${f.id}`}
-              badge={<span className="code">{f.code}</span>}
-              title={f.name}
-              sub={`${f.owner} · ${f.village} ต.${f.subdistrict} · ${f.phone}`}
-              side={`${num(counts[f.id] ?? 0)} ตัว`}
-            />
-          ))}
-        </List>
+      <Card
+        title="กิจกรรมสหกรณ์"
+        hint={`กำลังจะถึง ${num(upcoming.length)} · ผ่านไปแล้ว ${num(past.length)}`}
+        action={
+          canPost ? (
+            <button
+              className="btn ghost mini"
+              onClick={() => setComposing((v) => !v)}
+            >
+              {composing ? 'ปิด' : 'ประกาศ'}
+            </button>
+          ) : undefined
+        }
+      >
+        {composing && canPost && (
+          <EventComposer
+            onPosted={() => {
+              setComposing(false)
+              void load()
+            }}
+          />
+        )}
+        {rows.length === 0 && !composing && (
+          <Empty>ยังไม่มีประกาศกิจกรรมของสหกรณ์</Empty>
+        )}
+        {upcoming.map((e, i) => (
+          <EventCard key={e.localId} event={e} lead={i === 0} />
+        ))}
       </Card>
 
-      <Card title="ผู้ใช้ระบบ" hint={`${users.length} บัญชี`}>
-        <div className="tablewrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>ชื่อ</th>
-                <th>บทบาท</th>
-                <th>โทรศัพท์</th>
-                <th>ฟาร์มที่ดูแล</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.name}</td>
-                  <td>{u.role}</td>
-                  <td className="num">{u.phone}</td>
-                  <td className="num">{u.farmIds.length || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {past.length > 0 && (
+        <Card title="ผ่านไปแล้ว" hint={`${num(past.length)} รายการ`}>
+          {past.slice(0, 20).map((e) => (
+            <EventCard key={e.localId} event={e} />
+          ))}
+        </Card>
+      )}
+    </>
+  )
+}
+
+/**
+ * ประกาศหนึ่งใบ — ใบที่ใกล้ถึงที่สุดแสดงเป็นการ์ดเข้มตามดีไซน์
+ * ที่เหลือเป็นการ์ดธรรมดา เพื่อให้เห็นว่าอันไหนต้องรู้ก่อน
+ */
+function EventCard({ event, lead }: { event: CoopEvent; lead?: boolean }) {
+  const when = dateTime(event.startAt)
+  const to = event.audience ? ROLE_LABEL[event.audience] : 'ทุกบทบาท'
+
+  if (lead)
+    return (
+      <div className="slab">
+        <span className="slab-chip">
+          <CalendarDays size={12} /> {when}
+        </span>
+        <h2>{event.title}</h2>
+        <p>{event.body}</p>
+        <p>
+          {event.place && `${event.place} · `}
+          ถึง {to} · ประกาศโดย {event.postedBy}
+        </p>
+      </div>
+    )
+
+  return (
+    <div className="lot">
+      <div className="lot-head">
+        <Pill tone="mute">
+          <CalendarDays size={12} /> {when}
+        </Pill>
+        <span className="lot-left">{to}</span>
+      </div>
+      <div className="lot-name">{event.title}</div>
+      <div className="lot-meta">
+        {event.body}
+        {event.place && (
+          <>
+            {' '}
+            · <MapPin size={12} className="ic-inline" /> {event.place}
+          </>
+        )}{' '}
+        · ประกาศโดย {event.postedBy}
+      </div>
+    </div>
+  )
+}
+
+function EventComposer({ onPosted }: { onPosted: () => void }) {
+  const account = useAccount()
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [place, setPlace] = useState('')
+  const [startAt, setStartAt] = useState('')
+  const [audience, setAudience] = useState<Role | 'all'>('all')
+  const [busy, setBusy] = useState(false)
+
+  async function submit() {
+    const at = Date.parse(startAt)
+    if (!title.trim() || Number.isNaN(at)) return
+    setBusy(true)
+    try {
+      await postCoopEvent(
+        {
+          title: title.trim(),
+          body: body.trim(),
+          place: place.trim(),
+          startAt: at,
+          endAt: null,
+          audience: audience === 'all' ? null : audience,
+        },
+        { userId: account.userId, name: account.name, role: account.role },
+      )
+      setTitle('')
+      setBody('')
+      setPlace('')
+      onPosted()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Field label="หัวข้อ *">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น ประชุมสมาชิกประจำเดือน" />
+      </Field>
+      <Field label="รายละเอียด">
+        <input value={body} onChange={(e) => setBody(e.target.value)} />
+      </Field>
+      <div className="grid2">
+        <Field label="วันและเวลา *">
+          <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
+        </Field>
+        <Field label="สถานที่">
+          <input value={place} onChange={(e) => setPlace(e.target.value)} />
+        </Field>
+      </div>
+      <Field label="ประกาศถึง">
+        <select value={audience} onChange={(e) => setAudience(e.target.value as Role | 'all')}>
+          <option value="all">ทุกบทบาท</option>
+          <option value="farmer">{ROLE_LABEL.farmer}</option>
+          <option value="husbandry">{ROLE_LABEL.husbandry}</option>
+          <option value="coop">{ROLE_LABEL.coop}</option>
+        </select>
+      </Field>
+      <div className="row">
+        <button className="btn" disabled={busy || !title.trim() || !startAt} onClick={() => void submit()}>
+          {busy ? 'กำลังประกาศ…' : 'ประกาศ'}
+        </button>
+      </div>
+      <Note>ประกาศนี้ไม่สร้างงานและไม่นับรวมกับอัตราการตอบสนองต่อแจ้งเตือน</Note>
     </>
   )
 }

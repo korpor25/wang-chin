@@ -1,5 +1,5 @@
 /**
- * วังชิ้นฟาร์ม — ระบบสนับสนุนการผสมเทียมโคขุน สหกรณ์วังชิ้น
+ * ระบบสนับสนุนการผสมเทียมโคขุน สหกรณ์การเกษตรวังชิ้น จำกัด
  * ทำงานแบบออฟไลน์ก่อนเสมอ: บันทึกลงเครื่องทันที แล้วส่งขึ้นระบบเมื่อมีสัญญาณ
  */
 import { useEffect, useState } from 'react'
@@ -11,15 +11,18 @@ import { AnimalDetail } from './routes/AnimalDetail'
 import { RecordCatalog, RecordForm } from './routes/Record'
 import { Tasks } from './routes/Tasks'
 import { More } from './routes/More'
-import { Alerts, Farms } from './routes/Alerts'
+import { Alerts } from './routes/Alerts'
 import { Inventory } from './routes/Inventory'
-import { Reports } from './routes/Reports'
 import { SyncCenter } from './routes/SyncCenter'
 import { Settings } from './routes/Settings'
+import { Assign } from './routes/Assign'
 import { Login } from './routes/Login'
 import { NotFound } from './routes/NotFound'
 
 import { seedIfEmpty } from './data/seed'
+import { getParams } from './data/queries'
+import { runEscalation } from './data/tasks'
+import { requestPersist } from './lib/storage'
 import { useAccount, useSession } from './state/session'
 import type { Role } from './domain/types'
 import { Card, Empty, Skeleton } from './components/ui'
@@ -47,6 +50,19 @@ function Require({
   )
 }
 
+/**
+ * หน้าที่อยู่นอกขอบเขตเฟสนี้ — เก็บโค้ดไว้ แต่ยังไม่เปิดให้เข้า
+ * เฟสนี้ทำเฉพาะภาค ก รายงาน (ค-06) และทะเบียนฟาร์ม/สมาชิก จึงยกไปพร้อมกัน
+ * เปิดใช้เมื่อถึงเฟสถัดไปได้ด้วยการเปลี่ยน element กลับเป็นหน้าจริง
+ */
+function NextPhase({ title, why }: { title: string; why: string }) {
+  return (
+    <Card title={title}>
+      <Empty>{why}</Empty>
+    </Card>
+  )
+}
+
 export default function App() {
   const [dataReady, setDataReady] = useState(false)
   const account = useSession((s) => s.account)
@@ -56,11 +72,33 @@ export default function App() {
   useEffect(() => {
     restore()
     void seedIfEmpty().finally(() => setDataReady(true))
+    // OFF-08 — ขอสิทธิ์เก็บข้อมูลถาวรตั้งแต่เปิดแอป ไม่งั้นงานภาคสนามยังอยู่ในสถานะ
+    // best-effort ที่ระบบลบทิ้งได้เองเมื่อพื้นที่ใกล้เต็ม
+    void requestPersist().catch(() => undefined)
   }, [restore])
+
+  /**
+   * ตัวรันของ ค-04 — งานที่เลยกำหนดต้องถูกยกระดับจริง ไม่ใช่มีแต่สถานะรออยู่เฉย ๆ
+   * รันตอนเปิดแอปและทุก 15 นาทีระหว่างเปิดค้างไว้ ทำงานได้แม้ออฟไลน์เพราะคำนวณจากในเครื่อง
+   */
+  useEffect(() => {
+    if (!dataReady || !account) return
+    let alive = true
+    const tick = async () => {
+      const params = await getParams()
+      if (alive) await runEscalation(params)
+    }
+    void tick()
+    const id = setInterval(() => void tick(), 15 * 60_000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [dataReady, account])
 
   if (!dataReady || !sessionReady)
     return (
-      <div className="shell-body" style={{ paddingTop: 24 }}>
+      <div className="shell-body boot">
         <Skeleton rows={4} />
         <Skeleton rows={3} />
       </div>
@@ -83,9 +121,10 @@ export default function App() {
           <Route
             path="farms"
             element={
-              <Require roles={['coop']}>
-                <Farms />
-              </Require>
+              <NextPhase
+                title="ฟาร์มและสมาชิก"
+                why="เฟสนี้ทำเฉพาะกิจกรรมภาค ก · ทะเบียนฟาร์มและผู้ใช้มาจากการนำเข้าข้อมูล ยังไม่มีหน้าจัดการในเฟสนี้"
+              />
             }
           />
           <Route
@@ -99,8 +138,17 @@ export default function App() {
           <Route
             path="reports"
             element={
+              <NextPhase
+                title="รายงานและตัวชี้วัด"
+                why="รายงานคือกิจกรรม ค-06 ซึ่งยกไปเฟสถัดไปพร้อมภาคอื่น ตัวเลขสรุปเท่าที่ภาค ก ต้องใช้อยู่บนหน้าหลักแล้ว"
+              />
+            }
+          />
+          <Route
+            path="assign"
+            element={
               <Require roles={['coop']}>
-                <Reports />
+                <Assign />
               </Require>
             }
           />

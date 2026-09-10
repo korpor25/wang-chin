@@ -4,6 +4,7 @@ import { Card, Chips, Empty, List, Note, Skeleton, Stat, Stats } from '../compon
 import { TaskRow } from './Dashboard'
 import { taskBuckets } from '../data/queries'
 import { db } from '../data/db'
+import { inPhase } from '../domain/activities'
 import { useAccount } from '../state/session'
 import { num } from '../lib/format'
 import type { Task } from '../domain/types'
@@ -19,7 +20,7 @@ const OPTIONS: Array<{ value: Bucket; label: string }> = [
 ]
 
 export function Tasks() {
-  const { role, isAdmin } = useAccount()
+  const { userId, role, isAdmin } = useAccount()
   const [bucket, setBucket] = useState<Bucket>('today')
   const [data, setData] = useState<Awaited<ReturnType<typeof taskBuckets>> | null>(null)
   const [doneRows, setDoneRows] = useState<Task[]>([])
@@ -27,26 +28,36 @@ export function Tasks() {
   useEffect(() => {
     let alive = true
     void (async () => {
-      const farmIds = role === 'farmer' ? ((await db.users.get('u_farmer'))?.farmIds ?? []) : undefined
+      const farmIds = role === 'farmer' ? ((await db.users.get(userId))?.farmIds ?? []) : undefined
       const [b, d] = await Promise.all([
-        taskBuckets(role, farmIds, isAdmin),
-        db.tasks.where('status').equals('done').reverse().limit(50).toArray(),
+        taskBuckets(role, farmIds, isAdmin, userId),
+        db.tasks.where('status').equals('done').reverse().limit(200).toArray(),
       ])
       if (!alive) return
       setData(b)
-      setDoneRows(d.sort((x, y) => (y.doneAt ?? 0) - (x.doneAt ?? 0)))
+      setDoneRows(
+        d.filter((k) => inPhase(k.activityCode)).sort((x, y) => (y.doneAt ?? 0) - (x.doneAt ?? 0)).slice(0, 50),
+      )
     })()
     return () => {
       alive = false
     }
-  }, [role, isAdmin, bucket])
+  }, [userId, role, isAdmin, bucket])
 
   if (!data) return <Skeleton rows={5} />
 
   const rows = bucket === 'done' ? doneRows : data[bucket]
 
+  const today = new Date().toLocaleDateString('th-TH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
   return (
     <>
+      <p className="daystamp">ประจำวัน{today}</p>
       <Card title="งานของฉัน" hint="ระบบสร้างจากเหตุการณ์และค่าพารามิเตอร์ชีววิทยา">
         <Stats>
           <Stat label="เลยกำหนด" value={num(data.overdue.length)} sub="รายการ" />
@@ -56,8 +67,8 @@ export function Tasks() {
         <Chips value={bucket} options={OPTIONS} onChange={setBucket} />
         {data.overdue.length > 0 && bucket !== 'overdue' && (
           <Note>
-            มีงานเลยกำหนด {data.overdue.length} รายการ — ถ้าเลยเกินเกณฑ์โดยไม่มีการยืนยัน
-            ระบบจะยกระดับส่งต่อให้เจ้าหน้าที่สหกรณ์ติดตาม (ค-04)
+            มีงานเลยกำหนด {data.overdue.length} รายการ — ถ้าปล่อยค้างต่อไปอีก
+            ระบบจะส่งเรื่องให้เจ้าหน้าที่สหกรณ์ช่วยตาม
           </Note>
         )}
       </Card>

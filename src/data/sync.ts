@@ -91,17 +91,60 @@ function backoffMs(attempts: number) {
   return Math.min(30 * 60_000, 2 ** attempts * 1000)
 }
 
+/** ปลายทางจริง ตั้งผ่าน VITE_API_URL — ไม่ตั้งไว้ = ใช้ตัวจำลองสำหรับเดโมและทดสอบ UX */
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+
+/** ตัวข้อมูลจริงที่ต้องส่งไปกับรายการในคิว */
+async function payloadFor(item: OutboxItem): Promise<unknown> {
+  if (item.table === 'records') return db.records.where('localId').equals(item.refLocalId).first()
+  if (item.table === 'tasks') return db.tasks.where('localId').equals(item.refLocalId).first()
+  if (item.table === 'photos') return db.photos.where('localId').equals(item.refLocalId).first()
+  return db.animals.get(item.refLocalId)
+}
+
 /**
- * จุดเดียวที่ต้องเปลี่ยนเมื่อมี API จริง
- * ตอนนี้จำลองผลลัพธ์ตามสัดส่วนที่ใกล้เคียงงานภาคสนาม
+ * จุดเดียวที่ต้องแตะเมื่อเปลี่ยน backend
+ *
+ * เมื่อมี VITE_API_URL จะส่งจริงและแปลผลตามรหัสสถานะ
+ *   409  = ข้อมูลฝั่งเซิร์ฟเวอร์ใหม่กว่า ถือเป็นความขัดแย้ง ให้ผู้ใช้เลือกเอง (OFF-03)
+ *   4xx  = คำขอผิดรูป ลองใหม่ก็ไม่หาย แต่ยังนับเป็น error เพื่อให้คนเข้ามาดูหลังครบ 5 ครั้ง
+ *   5xx / เครือข่ายล้ม = error แล้วเข้ารอบ backoff ตามปกติ
+ * ถ้าไม่ตั้งค่าไว้ จะจำลองผลลัพธ์ตามสัดส่วนที่ใกล้เคียงงานภาคสนามเหมือนเดิม
  */
 async function pushOne(item: OutboxItem): Promise<'ok' | 'conflict' | 'error'> {
-  // หน่วงตามขนาดข้อมูลเล็กน้อย ให้ใกล้เคียงการส่งจริงบนเน็ตมือถือ
-  await new Promise((r) => setTimeout(r, 60 + Math.min(400, item.bytes / 2000) + Math.random() * 120))
-  const roll = Math.random()
-  if (roll < 0.08) return 'error'
-  if (roll < 0.11) return 'conflict'
-  return 'ok'
+  if (!API_URL) {
+    // หน่วงตามขนาดข้อมูลเล็กน้อย ให้ใกล้เคียงการส่งจริงบนเน็ตมือถือ
+    await new Promise((r) => setTimeout(r, 60 + Math.min(400, item.bytes / 2000) + Math.random() * 120))
+    const roll = Math.random()
+    if (roll < 0.08) return 'error'
+    if (roll < 0.11) return 'conflict'
+    return 'ok'
+  }
+
+  try {
+    const body = await payloadFor(item)
+    if (!body) return 'ok' // ของถูกลบไปแล้ว ไม่มีอะไรต้องส่ง
+    const res = await fetch(`${API_URL}/sync/${item.table}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ op: item.op, localId: item.refLocalId, data: body }),
+    })
+    if (res.status === 409) {
+      // เก็บฉบับของเซิร์ฟเวอร์ไว้ให้หน้าจอเทียบ ห้ามทับเงียบ ๆ
+      const server = await res.json().catch(() => null)
+      if (item.table === 'records' && server && typeof server === 'object') {
+        const rec = await db.records.where('localId').equals(item.refLocalId).first()
+        if (rec?.id)
+          await db.records.update(rec.id, {
+            serverPayload: (server as { payload?: Record<string, unknown> }).payload ?? server,
+          })
+      }
+      return 'conflict'
+    }
+    return res.ok ? 'ok' : 'error'
+  } catch {
+    return 'error'
+  }
 }
 
 export async function runSync(limit = 50): Promise<SyncOutcome> {
@@ -128,19 +171,26 @@ export async function runSync(limit = 50): Promise<SyncOutcome> {
     out.attempted++
     const result = await pushOne(item)
 
+    // ตัวนับรายการค้างนับเฉพาะบันทึกกิจกรรม งานและรูปใช้คิวร่วมกันแต่ไม่ได้นับที่ตัวเดียวกัน
+    const isRecord = item.table === 'records'
+
     if (result === 'ok') {
-      await markRecord(item.refLocalId, 'synced')
+      if (isRecord) {
+        await markRecord(item.refLocalId, 'synced')
+        await bumpCounter('records.pending', -1)
+      }
       await db.outbox.delete(item.id!)
       await bumpCounter('outbox.size', -1)
-      await bumpCounter('records.pending', -1)
       out.succeeded++
       out.bytes += item.bytes
     } else if (result === 'conflict') {
-      await markRecord(item.refLocalId, 'conflict')
+      if (isRecord) {
+        await markRecord(item.refLocalId, 'conflict')
+        await bumpCounter('records.pending', -1)
+        await bumpCounter('records.conflict', 1)
+      }
       await db.outbox.delete(item.id!)
       await bumpCounter('outbox.size', -1)
-      await bumpCounter('records.pending', -1)
-      await bumpCounter('records.conflict', 1)
       out.conflicts++
     } else {
       const attempts = item.attempts + 1
@@ -149,8 +199,9 @@ export async function runSync(limit = 50): Promise<SyncOutcome> {
         nextAttemptAt: Date.now() + backoffMs(attempts),
         lastError: 'ส่งไม่สำเร็จ เครือข่ายขัดข้อง',
       })
-      // เกิน 5 ครั้งถือว่าล้มเหลว ต้องให้คนเข้ามาดู
-      if (attempts >= 5) {
+      // ครบ 5 ครั้งถือว่าล้มเหลว ต้องให้คนเข้ามาดู — นับครั้งเดียวตอนข้ามเกณฑ์
+      // ไม่งั้นทุกรอบถัดไปจะบวกตัวนับซ้ำจนยอด "ล้มเหลว" ในศูนย์ซิงค์เพี้ยน
+      if (attempts === 5 && isRecord) {
         await markRecord(item.refLocalId, 'failed')
         await bumpCounter('records.failed', 1)
       }

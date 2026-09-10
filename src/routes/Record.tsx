@@ -1,18 +1,16 @@
 /** แคตตาล็อกกิจกรรม — ทางเข้าเดียวสำหรับบันทึกทุกอย่าง กรองตามบทบาทผู้ใช้ */
-import { useParams } from 'react-router'
-import { Card, Empty, GroupHead, List, Note, Row } from '../components/ui'
+import { Link, useParams } from 'react-router'
+import { ActRow, Card, Empty, Note } from '../components/ui'
+import { activityIcon } from '../components/activityIcon'
 import { ActivityForm } from '../components/ActivityForm'
 import {
-  ACTIVITIES,
   ACTIVITY_BY_CODE,
   GROUP_LABEL,
+  PHASE_GROUPS,
   activitiesForRole,
-  type ActivityGroup,
 } from '../domain/activities'
 import { ROLE_LABEL } from '../domain/types'
 import { useAccount } from '../state/session'
-
-const GROUPS: ActivityGroup[] = ['field', 'asset', 'system', 'review']
 
 export function RecordCatalog() {
   const { role, readOnly } = useAccount()
@@ -22,7 +20,7 @@ export function RecordCatalog() {
     <>
       <Card
         title="บันทึกกิจกรรม"
-        hint={`บทบาท ${ROLE_LABEL[role]} ทำได้ ${mine.length} จาก ${ACTIVITIES.length} กิจกรรม`}
+        hint={`บทบาท ${ROLE_LABEL[role]} · ${mine.length} กิจกรรม`}
       >
         <Note>
           {readOnly
@@ -31,53 +29,72 @@ export function RecordCatalog() {
         </Note>
       </Card>
 
-      {GROUPS.map((g) => {
+      {PHASE_GROUPS.map((g) => {
         const items = mine.filter((a) => a.group === g)
         if (items.length === 0) return null
         return (
-          <Card key={g} title={GROUP_LABEL[g]}>
-            <List>
-              {items.map((a) => (
-                <Row
-                  key={a.code}
-                  to={`/record/${encodeURIComponent(a.code)}`}
-                  badge={<span className="code">{a.code}</span>}
-                  title={a.name}
-                  sub={a.trigger}
-                />
-              ))}
-            </List>
+          <Card key={g} title={GROUP_LABEL[g]} hint="แตะการ์ดเพื่อเปิดฟอร์มบันทึก">
+            {items.map((a) => (
+              <ActRow
+                key={a.code}
+                to={`/record/${encodeURIComponent(a.code)}`}
+                Icon={activityIcon(a.code)}
+                code={a.code}
+                name={a.name}
+                sub={a.trigger}
+              />
+            ))}
           </Card>
         )
       })}
 
-      {/* ให้เห็นว่ามีกิจกรรมอื่นอยู่ แต่บทบาทนี้ทำไม่ได้ ป้องกันความสับสนว่าระบบทำไม่ครบ */}
-      {mine.length < ACTIVITIES.length && (
-        <Card title="กิจกรรมของบทบาทอื่น" hint="แสดงไว้ให้เห็นภาพรวม บทบาทนี้บันทึกไม่ได้">
-          <List>
-            {ACTIVITIES.filter((a) => !mine.includes(a)).map((a) => (
-              <Row
-                key={a.code}
-                onClick={() => undefined}
-                badge={<span className="code">{a.code}</span>}
-                title={a.name}
-                sub={`ผู้ทำ: ${a.actors.map((r) => ROLE_LABEL[r]).join(' / ')}`}
-              />
-            ))}
-          </List>
+      {/* เจ้าหน้าที่สหกรณ์ไม่มีกิจกรรมภาค ก ของตัวเองเลย (SEC-02) — ชี้ทางไปหน้าที่ใช่แทน */}
+      {mine.length === 0 && (
+        <Card title="บทบาทนี้ไม่ได้กรอกกิจกรรมภาค ก">
+          <Note>
+            เฟสนี้เจ้าหน้าที่สหกรณ์ทำหน้าที่มอบหมายและติดตาม ไม่ได้เป็นผู้บันทึกกิจกรรมรายตัว
+            งานที่ระบบสร้างขึ้นจะรอให้ระบุผู้รับผิดชอบที่หน้ามอบหมายงาน
+          </Note>
+          <div className="row">
+            <Link className="btn" to="/assign">
+              ไปหน้ามอบหมายงาน <span className="go">→</span>
+            </Link>
+          </div>
         </Card>
       )}
+
     </>
   )
 }
 
 export function RecordForm() {
   const { code = '' } = useParams()
+  const { role } = useAccount()
   const spec = ACTIVITY_BY_CODE.get(decodeURIComponent(code))
   if (!spec) return <Empty>ไม่พบกิจกรรมรหัสนี้</Empty>
-  return <ActivityForm spec={spec} />
-}
+  // กันการพิมพ์ URL ตรงไปยังกิจกรรมนอกขอบเขตเฟสนี้ ซ่อนเมนูอย่างเดียวไม่พอ
+  if (!PHASE_GROUPS.includes(spec.group))
+    return (
+      <Card title={`${spec.code} · ${spec.name}`}>
+        <Empty>
+          เฟสนี้ทำเฉพาะกิจกรรมภาค ก · งานภาคสนามรายตัว กิจกรรมนี้อยู่ในกลุ่ม “{GROUP_LABEL[spec.group]}”
+          ซึ่งยกไปทำในเฟสถัดไป
+        </Empty>
+      </Card>
+    )
+  /**
+   * SEC-05 — กันที่ระดับ route ไม่ใช่แค่ซ่อนเมนู
+   * ถึงจะพิมพ์ URL ของกิจกรรมบทบาทอื่นเข้ามาตรง ๆ ก็เปิดฟอร์มไม่ได้
+   * เมื่อต่อ backend จริงต้องตรวจซ้ำฝั่งเซิร์ฟเวอร์อีกชั้นเสมอ (SEC-06)
+   */
+  if (!spec.actors.includes(role))
+    return (
+      <Card title={`${spec.code} · ${spec.name}`}>
+        <Empty>
+          กิจกรรมนี้เป็นของ {spec.actors.map((r) => ROLE_LABEL[r]).join(' / ')} บทบาทของคุณจึงบันทึกไม่ได้
+        </Empty>
+      </Card>
+    )
 
-export function GroupedCatalog() {
-  return <GroupHead>ทั้งหมด</GroupHead>
+  return <ActivityForm spec={spec} />
 }

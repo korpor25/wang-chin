@@ -1,10 +1,10 @@
 /**
  * ข้อมูลตัวอย่างสำหรับเดโม UX — ยังไม่มี backend จึงสร้างขึ้นในเครื่อง
- * ตัวเลขอิงบริบทจริงของสหกรณ์โคขุนวังชิ้น อ.วังชิ้น จ.แพร่
+ * ตัวเลขอิงบริบทจริงของสหกรณ์การเกษตรวังชิ้น จำกัด อ.วังชิ้น จ.แพร่
  */
 import { db, bumpCounter, newLocalId, rebuildCounters } from './db'
-import { DEFAULT_PARAMS, addDays, tasksAfterCalving, tasksAfterInsemination } from '../domain/rules'
-import type { Alert, Animal, Farm, FeedGroup, SemenBatch, Tank, Task, User } from '../domain/types'
+import { DEFAULT_PARAMS, tasksAfterCalving, tasksAfterInsemination } from '../domain/rules'
+import type { Alert, Animal, CoopEvent, Farm, FeedGroup, SemenBatch, Tank, Task, User } from '../domain/types'
 
 const DAY = 86_400_000
 const now = () => Date.now()
@@ -72,7 +72,7 @@ async function seed(force = false) {
     await Promise.all([
       db.farms.clear(), db.animals.clear(), db.users.clear(), db.semen.clear(),
       db.tanks.clear(), db.feedGroups.clear(), db.records.clear(), db.tasks.clear(),
-      db.alerts.clear(), db.outbox.clear(), db.counters.clear(),
+      db.alerts.clear(), db.events.clear(), db.outbox.clear(), db.counters.clear(),
     ])
   }
 
@@ -102,6 +102,9 @@ async function seed(force = false) {
   const users: User[] = [
     { id: 'u_farmer', name: 'สมชาย ใจดี', role: 'farmer', phone: '0810000001', farmIds: ['farm_1'], readOnly: false, isAdmin: false, active: true },
     { id: 'u_husb', name: 'อนุชา วงศ์ใหญ่', role: 'husbandry', phone: '0810000002', farmIds: allFarms, readOnly: false, isAdmin: false, active: true },
+    // สัตวบาลคนที่สองและเกษตรกรอีกรายมีไว้ให้หน้ามอบหมายงานมีตัวเลือกจริง
+    { id: 'u_husb2', name: 'ดวงเดือน แสนคำ', role: 'husbandry', phone: '0810000005', farmIds: allFarms, readOnly: false, isAdmin: false, active: true },
+    { id: 'u_farmer2', name: 'บุญมา ศรีวงศ์', role: 'farmer', phone: '0810000006', farmIds: ['farm_2'], readOnly: false, isAdmin: false, active: true },
     { id: 'u_coop', name: 'วิไล ศรีบุญเรือง', role: 'coop', phone: '0810000003', farmIds: allFarms, readOnly: false, isAdmin: true, active: true },
     { id: 'u_board', name: 'ประสิทธิ์ คำมูล', role: 'coop', phone: '0810000004', farmIds: allFarms, readOnly: true, isAdmin: false, active: true },
   ]
@@ -210,6 +213,9 @@ async function seed(force = false) {
       // งานที่เลยกำหนดมานานถือว่าปิดไปแล้ว เหลือค้างเฉพาะที่เพิ่งเลยกำหนดจริง ๆ
       const done = d.dueAt < t - 3 * DAY
       const overdue = !done && d.dueAt < t - d.toleranceDays * DAY
+      // งานที่ระบบคำนวณขึ้นมาจะยังไม่มีชื่อผู้รับผิดชอบ จนกว่าเจ้าหน้าที่จะมอบหมาย (ASG-02)
+      // ชุดตัวอย่างจึงมอบหมายไว้แค่บางส่วน ให้เห็นทั้งสองสถานะในหน้ามอบหมายงาน
+      const assigned = d.assignedRole === 'husbandry' && tasks.length % 3 === 0
       tasks.push({
         localId: newLocalId('task'),
         activityCode: d.activityCode,
@@ -219,7 +225,9 @@ async function seed(force = false) {
         dueAt: d.dueAt,
         toleranceDays: d.toleranceDays,
         assignedRole: d.assignedRole,
-        assignedTo: d.assignedRole === 'husbandry' ? 'u_husb' : null,
+        assignedTo: assigned ? (tasks.length % 6 === 0 ? 'u_husb2' : 'u_husb') : null,
+        assignedAt: assigned ? t - 2 * DAY : null,
+        assignedBy: assigned ? 'u_coop' : null,
         priority: d.priority,
         status: done ? 'done' : overdue ? 'overdue' : 'open',
         derivedFrom: d.derivedFrom,
@@ -232,28 +240,6 @@ async function seed(force = false) {
     if (a.lastCalvingAt) pushTasks(a, tasksAfterCalving(a.lastCalvingAt, DEFAULT_PARAMS))
     if (a.lastBredAt) pushTasks(a, tasksAfterInsemination(a.lastBredAt, DEFAULT_PARAMS))
   }
-
-  // งานคลังตามรอบทรัพย์สิน (ค-02)
-  tasks.push(
-    {
-      localId: newLocalId('task'), activityCode: 'ข-03', animalId: null, farmId: null,
-      title: 'วัดระดับไนโตรเจนเหลว ถัง B', dueAt: t - 5 * DAY, toleranceDays: 2,
-      assignedRole: 'coop', assignedTo: 'u_coop', priority: 'high', status: 'overdue',
-      derivedFrom: 'รอบ 2 สัปดาห์ · ระเหยเร็วผิดปกติ', doneAt: null, doneRecordLocalId: null,
-    },
-    {
-      localId: newLocalId('task'), activityCode: 'ข-02', animalId: null, farmId: null,
-      title: 'ตรวจคุณภาพน้ำเชื้อ ล็อต C-207-L2411', dueAt: t + 3 * DAY, toleranceDays: 7,
-      assignedRole: 'coop', assignedTo: 'u_coop', priority: 'normal', status: 'open',
-      derivedFrom: 'ครบรอบ 6 เดือน', doneAt: null, doneRecordLocalId: null,
-    },
-    {
-      localId: newLocalId('task'), activityCode: 'ข-07', animalId: null, farmId: null,
-      title: 'อบรมสอบเทียบผู้ให้คะแนน BCS ประจำปี', dueAt: t + 20 * DAY, toleranceDays: 14,
-      assignedRole: 'coop', assignedTo: 'u_coop', priority: 'low', status: 'open',
-      derivedFrom: 'รอบปีละครั้ง', doneAt: null, doneRecordLocalId: null,
-    },
-  )
 
   // ── แจ้งเตือน (ค-03) จากงานที่ใกล้ถึงกำหนดและที่เลยกำหนด ──
   const alerts: Alert[] = tasks
@@ -276,9 +262,35 @@ async function seed(force = false) {
       resolvedAt: null,
     }))
 
+  // ── กิจกรรมสหกรณ์ (ALR-01) — ประกาศที่รับทราบเฉย ๆ ไม่ใช่งานและไม่ใช่แจ้งเตือน ──
+  const events: CoopEvent[] = [
+    {
+      localId: newLocalId('event'),
+      title: 'ประชุมใหญ่สามัญประจำปีสหกรณ์',
+      body: 'รายงานผลการดำเนินงานและเลือกตั้งคณะกรรมการชุดใหม่ สมาชิกลงทะเบียน 08:30 น.',
+      place: 'ห้องประชุมสหกรณ์การเกษตรวังชิ้น จำกัด',
+      startAt: t + 9 * DAY,
+      endAt: null,
+      audience: null,
+      postedBy: 'วิไล ศรีบุญเรือง',
+      postedAt: t - 2 * DAY,
+    },
+    {
+      localId: newLocalId('event'),
+      title: 'หน่วยผสมเทียมเคลื่อนที่ ต.นาพูน',
+      body: 'สัตวบาลออกหน่วยตรวจความพร้อมและผสมเทียม แจ้งชื่อโคล่วงหน้าที่เจ้าหน้าที่',
+      place: 'ศาลาบ้านนาพูน',
+      startAt: t + 3 * DAY,
+      endAt: null,
+      audience: 'farmer',
+      postedBy: 'วิไล ศรีบุญเรือง',
+      postedAt: t - DAY,
+    },
+  ]
+
   await db.transaction(
     'rw',
-    [db.farms, db.animals, db.users, db.semen, db.tanks, db.feedGroups, db.tasks, db.alerts],
+    [db.farms, db.animals, db.users, db.semen, db.tanks, db.feedGroups, db.tasks, db.alerts, db.events],
     async () => {
       await db.farms.bulkAdd(farms)
       await db.animals.bulkAdd(animals)
@@ -288,6 +300,7 @@ async function seed(force = false) {
       await db.feedGroups.bulkAdd(feedGroups)
       await db.tasks.bulkAdd(tasks)
       await db.alerts.bulkAdd(alerts)
+      await db.events.bulkAdd(events)
     },
   )
 
@@ -296,14 +309,3 @@ async function seed(force = false) {
   return true
 }
 
-/** ข้อมูลสภาพอากาศจำลอง 14 วันย้อนหลัง สำหรับ ค-05 */
-export function weatherSeries(days = 14) {
-  const t = now()
-  return Array.from({ length: days }, (_, i) => {
-    const at = addDays(t, -(days - 1 - i))
-    const tempMax = 31 + ((i * 7) % 9)
-    const tempMin = 22 + ((i * 3) % 5)
-    const humidity = 62 + ((i * 11) % 25)
-    return { at, tempMax, tempMin, humidity }
-  })
-}

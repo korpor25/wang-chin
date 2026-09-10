@@ -1,11 +1,14 @@
 /** โครายตัว — ทะเบียน วงจรปัจจุบัน ไทม์ไลน์เหตุการณ์ และปุ่มบันทึกกิจกรรมที่เกี่ยวข้อง */
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { Card, Chips, Empty, KeyValues, List, Note, PageHeader, Pill, Row, Skeleton } from '../components/ui'
+import { ActRow, Card, Chips, Empty, KeyValues, List, Note, PageHeader, Pill, Row, Skeleton } from '../components/ui'
 import { ACTIVITY_BY_CODE, activitiesForRole } from '../domain/activities'
+import { activityIcon } from '../components/activityIcon'
+import { CowModel } from '../components/CowModel'
 import { CYCLE_LABEL, type ActivityRecord, type Animal, type Farm, type Task } from '../domain/types'
 import { animalTimeline, getParams } from '../data/queries'
 import { breedingBlockers, goldenPeriod, nextHeatWindow } from '../domain/rules'
+import { BAND_TONE, bcsBand } from '../domain/bcs'
 import { db } from '../data/db'
 import { age, animalAge, dateTime } from '../lib/format'
 import { useAccount } from '../state/session'
@@ -101,13 +104,14 @@ export function AnimalDetail() {
                 ['BCS ล่าสุด', animal.lastBcs !== null ? `${animal.lastBcs} / ${params.bcsScaleMax}` : 'ยังไม่เคยประเมิน'],
               ]}
             />
+            <CowModel label={animal.tagNo} />
           </Card>
 
           {blockers.length > 0 && (
             <Card title="ยังผสมไม่ได้">
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5 }}>
+              <ul className="blocker-list">
                 {blockers.map((b) => (
-                  <li key={b} style={{ color: 'var(--crit)' }}>{b}</li>
+                  <li key={b}>{b}</li>
                 ))}
               </ul>
               <Note>ระบบจะเตือนก่อนบันทึกการผสม แต่ไม่ห้ามขาด เพราะหน้างานอาจมีเหตุจำเป็น</Note>
@@ -131,17 +135,16 @@ export function AnimalDetail() {
           )}
 
           <Card title="บันทึกกิจกรรมให้ตัวนี้" hint={`กิจกรรมที่บทบาทของคุณทำได้ ${allowed.length} รายการ`}>
-            <List>
-              {allowed.map((a) => (
-                <Row
-                  key={a.code}
-                  to={`/record/${encodeURIComponent(a.code)}?animal=${animal.id}`}
-                  badge={<span className="code">{a.code}</span>}
-                  title={a.name}
-                  sub={a.trigger}
-                />
-              ))}
-            </List>
+            {allowed.map((a) => (
+              <ActRow
+                key={a.code}
+                to={`/record/${encodeURIComponent(a.code)}?animal=${animal.id}`}
+                Icon={activityIcon(a.code)}
+                code={a.code}
+                name={a.name}
+                sub={a.trigger}
+              />
+            ))}
           </Card>
         </>
       )}
@@ -201,10 +204,10 @@ export function AnimalDetail() {
             )}
             <div className="row">
               <Link className="btn" to={`/record/${encodeURIComponent('ก-07')}?animal=${animal.id}`}>
-                บันทึกอาการเป็นสัด
+                บันทึกอาการเป็นสัด <span className="go">→</span>
               </Link>
               <Link className="btn ghost" to={`/record/${encodeURIComponent('ก-08')}?animal=${animal.id}`}>
-                บันทึกการผสม
+                บันทึกการผสม <span className="go">→</span>
               </Link>
             </div>
           </Card>
@@ -233,9 +236,9 @@ export function AnimalDetail() {
         <>
           <Card title="คะแนนสภาพร่างกาย (BCS)" hint={`${bcsRecords.length} ครั้ง`}>
             {animal.lastBcs !== null && (
-              <p style={{ fontSize: 26, fontWeight: 800, fontFamily: 'var(--mono)', color: 'var(--ink)' }}>
+              <p className={`hero-num t-${BAND_TONE[bcsBand(animal.lastBcs ?? 0)]}`}>
                 {animal.lastBcs}
-                <small style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}> / {params.bcsScaleMax}</small>
+                <small className="hero-unit"> / {params.bcsScaleMax}</small>
               </p>
             )}
             {animal.lastBcs !== null && animal.lastBcs < params.bcsMinBeforeBreeding && (

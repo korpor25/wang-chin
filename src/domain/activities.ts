@@ -31,6 +31,10 @@ export interface FieldSpec {
   step?: number
   unit?: string
   hint?: string
+  /** ค่าตั้งต้นตอนเปิดฟอร์ม ใช้กับตัวเลือกที่มีค่าปกติชัดเจน เช่น สเกล BCS ของโคเนื้อ */
+  default?: unknown
+  /** จำกัดให้เห็นเฉพาะบางบทบาท เช่น ช่องยืนยันผลของสัตวบาลใน ก-07 */
+  roles?: Role[]
 }
 
 export type ActivityGroup = 'field' | 'asset' | 'system' | 'review'
@@ -126,7 +130,15 @@ export const ACTIVITIES: ActivitySpec[] = [
     needsAnimal: true,
     fields: [
       { key: 'assessedAt', label: 'วันที่ประเมิน', type: 'date', required: true },
-      { key: 'scale', label: 'ชนิดสเกล', type: 'select', required: true, options: ['1–9 (โคเนื้อ)', '1–5 (โคนม)'] },
+      {
+        key: 'scale',
+        label: 'ชนิดสเกล',
+        type: 'select',
+        required: true,
+        options: ['1–9 (โคเนื้อ)', '1–5 (โคนม)'],
+        // สหกรณ์เลี้ยงโคขุน สเกลมาตรฐานจึงเป็น 9 ระดับ ตามมติที่ประชุม [29:56]
+        default: '1–9 (โคเนื้อ)',
+      },
       { key: 'score', label: 'คะแนนที่ให้', type: 'score', required: true, min: 1, max: 9 },
       {
         key: 'stage',
@@ -267,12 +279,22 @@ export const ACTIVITIES: ActivitySpec[] = [
       },
       { key: 'intensity', label: 'ความชัดของอาการ', type: 'select', required: true, options: ['ชัดเจน', 'ปานกลาง', 'สงสัย'] },
       { key: 'reporterType', label: 'ประเภทของผู้พบ', type: 'select', options: ['สัตวบาล', 'เกษตรกร'] },
+      // ขั้นยืนยันตามมติ [22:41] — คำแจ้งของเกษตรกรต้องผ่านสัตวบาลก่อนจึงจะเกิดงานผสม
+      {
+        key: 'verdict',
+        label: 'ผลการยืนยันของสัตวบาล',
+        type: 'select',
+        required: true,
+        options: ['เป็นสัดจริง', 'สัดหลอกหรือไม่ชัด'],
+        default: 'เป็นสัดจริง',
+        roles: ['husbandry'],
+      },
       WHO,
     ],
     derived: [
       'ช่วงเวลาผสมที่เหมาะสมซึ่งระบบคำนวณให้',
+      'งานยืนยันของสัตวบาล เมื่อผู้แจ้งเป็นเกษตรกร',
       'อัตราการตรวจพบสัดจำแนกตามวิธีและตามฟาร์ม',
-      'รายชื่อแม่โคที่ถึงกำหนดผสมในวันนี้',
     ],
   },
   {
@@ -647,11 +669,31 @@ export const ACTIVITIES: ActivitySpec[] = [
 
 export const ACTIVITY_BY_CODE = new Map(ACTIVITIES.map((a) => [a.code, a]))
 
-export function activitiesForRole(role: Role): ActivitySpec[] {
-  return ACTIVITIES.filter((a) => a.actors.includes(role))
+/**
+ * ขอบเขตของเฟสนี้ — ทำเฉพาะ **ภาค ก · งานภาคสนามรายตัว** (ก-01 ถึง ก-11)
+ *
+ * แคตตาล็อกยังเก็บครบทั้ง 26 รายการไว้เป็นเอกสารอ้างอิงของโครงการ
+ * แต่หน้าจอที่ผู้ใช้กรอกได้จริงตัดเหลือภาค ก อย่างเดียว
+ * เปิดภาคอื่นเมื่อถึงเฟสถัดไปได้ด้วยการเพิ่มกลุ่มลงในค่านี้ที่เดียว
+ */
+export const PHASE_GROUPS: ActivityGroup[] = ['field']
+
+/** กิจกรรมที่อยู่ในขอบเขตของเฟสนี้ */
+export const PHASE_ACTIVITIES = ACTIVITIES.filter((a) => PHASE_GROUPS.includes(a.group))
+
+const PHASE_CODES = new Set(PHASE_ACTIVITIES.map((a) => a.code))
+
+/**
+ * รหัสกิจกรรมนี้อยู่ในขอบเขตเฟสนี้ไหม
+ *
+ * ใช้กรองงานที่ค้างอยู่ในเครื่องจากชุดข้อมูลเก่า หรือที่เซิร์ฟเวอร์ส่งมาในอนาคต
+ * ซ่อนเมนูอย่างเดียวไม่พอ เพราะงานเข้ามาทางกำหนดการได้อีกทาง
+ */
+export function inPhase(code: string): boolean {
+  return PHASE_CODES.has(code)
 }
 
-/** กิจกรรมที่ผู้ใช้กรอกเองได้จริง (หมวด ค ระบบทำให้อัตโนมัติ ไม่มีฟอร์ม) */
-export function recordableForRole(role: Role): ActivitySpec[] {
-  return activitiesForRole(role).filter((a) => a.fields.length > 0)
+export function activitiesForRole(role: Role): ActivitySpec[] {
+  return PHASE_ACTIVITIES.filter((a) => a.actors.includes(role))
 }
+

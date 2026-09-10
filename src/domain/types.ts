@@ -1,5 +1,5 @@
 /**
- * ชนิดข้อมูลหลักของระบบสนับสนุนการผสมเทียมโคขุน สหกรณ์วังชิ้น
+ * ชนิดข้อมูลหลักของระบบสนับสนุนการผสมเทียมโคขุน สหกรณ์การเกษตรวังชิ้น จำกัด
  * อ้างอิง ER diagram และแคตตาล็อกกิจกรรมในเอกสารโครงการ
  */
 
@@ -14,6 +14,8 @@
  * แต่คนที่ออกหน่วยจริงคือสัตวบาล ส่วนสัตวแพทย์เข้ามาเป็นครั้งคราว)
  */
 export type Role = 'farmer' | 'husbandry' | 'coop'
+
+export const ROLES: Role[] = ['farmer', 'husbandry', 'coop']
 
 export const ROLE_LABEL: Record<Role, string> = {
   farmer: 'เกษตรกร',
@@ -154,14 +156,6 @@ export interface FeedLot {
 /** สถานะการซิงค์ตาม requirement ข้อ 4 */
 export type SyncStatus = 'pending' | 'syncing' | 'synced' | 'conflict' | 'failed'
 
-export const SYNC_LABEL: Record<SyncStatus, string> = {
-  pending: 'รอซิงค์',
-  syncing: 'กำลังซิงค์',
-  synced: 'ซิงค์แล้ว',
-  conflict: 'ขัดแย้ง',
-  failed: 'ล้มเหลว',
-}
-
 /**
  * บันทึกกิจกรรมหนึ่งครั้ง — ทุกกิจกรรมในแคตตาล็อกลงตารางเดียวกันหมด
  * โดยแยกกันด้วย activityCode และเก็บค่าที่กรอกไว้ใน payload
@@ -219,6 +213,30 @@ export interface Task {
   derivedFrom: string
   doneAt: number | null
   doneRecordLocalId: string | null
+  /** เวลาที่เจ้าหน้าที่ระบุตัวผู้รับผิดชอบ (ASG-02) */
+  assignedAt?: number | null
+  /** ผู้ที่สั่งมอบหมาย ใช้คู่กับ audit log (ASG-08) */
+  assignedBy?: string | null
+  /** งานที่เจ้าหน้าที่สร้างเองแบบเฉพาะกิจ ไม่ได้มาจากการคำนวณ (ASG-03) */
+  adHoc?: boolean
+}
+
+/**
+ * กิจกรรมสหกรณ์ (ALR-01) — ประกาศจากเจ้าหน้าที่ที่ "รับทราบเฉย ๆ"
+ * ต้องแยกออกจากงานและแจ้งเตือนให้ขาด เพราะสามอย่างนี้เรียกร้องจากผู้ใช้ไม่เหมือนกัน
+ */
+export interface CoopEvent {
+  id?: number
+  localId: string
+  title: string
+  body: string
+  place: string
+  startAt: number
+  endAt: number | null
+  /** null = ประกาศถึงทุกบทบาท */
+  audience: Role | null
+  postedBy: string
+  postedAt: number
 }
 
 /** การแจ้งเตือน (ค-03) พร้อมการติดตามผลตอบสนอง */
@@ -233,6 +251,8 @@ export interface Alert {
   level: 'info' | 'warn' | 'critical'
   channel: 'in-app' | 'line' | 'sms'
   toRole: Role
+  /** ระบุตัวบุคคลเมื่อเป็นเรื่องของคนคนเดียว เช่น การมอบหมายงาน — ว่าง = ถึงทั้งบทบาท */
+  toUser?: string | null
   sentAt: number
   readAt: number | null
   ackAt: number | null
@@ -270,6 +290,10 @@ export interface BioParams {
   bcsMinBeforeBreeding: number
   alertLeadDays: number
   escalateAfterDays: number
+  /** จำนวนหลอดคงเหลือที่เริ่มเตือน (สีส้ม) — มติ [33:41] ยังต้องยืนยันเกณฑ์จริง */
+  semenWarnStraws: number
+  /** จำนวนหลอดคงเหลือระดับวิกฤต (สีแดง) */
+  semenCritStraws: number
 }
 
 export interface Kpi {

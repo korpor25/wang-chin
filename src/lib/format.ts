@@ -58,6 +58,14 @@ export function animalAge(birth: number, to = Date.now()): string {
   return `${y} ปี ${m} เดือน`
 }
 
+/**
+ * เลยเวลาที่กำหนดมากี่วัน ปัดลง
+ * คำนวณสด ๆ จาก dueAt ที่เก็บอยู่แล้ว ไม่ต้องเก็บตัวนับเพิ่มและไม่ต้องมีตัวรันรายวัน
+ */
+export function daysPast(from: number, to = Date.now()): number {
+  return Math.max(0, Math.floor((to - from) / 86_400_000))
+}
+
 export function dateTime(ts: number): string {
   return new Date(ts).toLocaleString(TH, {
     day: 'numeric',
@@ -68,8 +76,3 @@ export function dateTime(ts: number): string {
   })
 }
 
-/** ความเร็วเขียน/อ่าน */
-export function speed(bytesWritten: number, ms: number): string {
-  if (ms <= 0) return '—'
-  return `${bytes((bytesWritten / ms) * 1000, 1)}/วินาที`
-}

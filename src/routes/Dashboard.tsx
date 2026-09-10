@@ -7,12 +7,14 @@
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { AlarmClock, CalendarClock, Droplets, Thermometer, TriangleAlert } from 'lucide-react'
-import { Card, Empty, KpiCard, List, Pill, Row, Spark } from '../components/ui'
-import { CYCLE_LABEL, type Kpi, type Task } from '../domain/types'
-import { computeKpis, getParams, heatStress, heatWatch, taskBuckets, type HeatWatchRow } from '../data/queries'
-import { heatStressLevel } from '../domain/rules'
+import { AlarmClock, CalendarClock } from 'lucide-react'
+import { Card, Empty, List, Pill, Row, Stat, Stats, Tile, TileGrid } from '../components/ui'
+import { activityIcon } from '../components/activityIcon'
+import { activitiesForRole } from '../domain/activities'
+import { CYCLE_LABEL, type Task } from '../domain/types'
+import { getParams, heatWatch, taskBuckets, type HeatWatchRow } from '../data/queries'
 import { useAccount } from '../state/session'
+import { daysPast } from '../lib/format'
 import { db } from '../data/db'
 
 const timeOnly = (ts: number) =>
@@ -25,48 +27,94 @@ const dayFull = (ts: number) =>
   new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
 
 export function Dashboard() {
-  const { role, isAdmin } = useAccount()
+  const { userId, role, isAdmin } = useAccount()
   const [buckets, setBuckets] = useState<Awaited<ReturnType<typeof taskBuckets>> | null>(null)
   const [heat, setHeat] = useState<{ inGolden: HeatWatchRow[]; expected: HeatWatchRow[] } | null>(null)
-  const [kpis, setKpis] = useState<Kpi[]>([])
-  const [tankAlert, setTankAlert] = useState<string | null>(null)
+  const [herd, setHerd] = useState<{ total: number; nearCalving: number } | null>(null)
 
   useEffect(() => {
     let alive = true
     void (async () => {
       const params = await getParams()
-      const farmIds =
-        role === 'farmer' ? ((await db.users.get('u_farmer'))?.farmIds ?? []) : undefined
-      const [b, h, k, tanks] = await Promise.all([
-        taskBuckets(role, farmIds, isAdmin),
+      // SEC-01 — เกษตรกรเห็นเฉพาะฟาร์มของบัญชีตัวเอง ไม่ใช่บัญชีตัวอย่างที่ผูกไว้ตายตัว
+      const farmIds = role === 'farmer' ? ((await db.users.get(userId))?.farmIds ?? []) : undefined
+      const [b, h, animals] = await Promise.all([
+        taskBuckets(role, farmIds, isAdmin, userId),
         heatWatch(params, farmIds),
-        computeKpis(),
-        db.tanks.toArray(),
+        db.animals.toArray(),
       ])
       if (!alive) return
       setBuckets(b)
       setHeat(h)
-      setKpis(k)
-      const bad = tanks.find((t) => t.status === 'critical')
-      setTankAlert(bad ? `${bad.code} ระดับไนโตรเจนเหลือ ${bad.levelCm} ซม.` : null)
+
+      // ตัวเลขสรุปฝูงบนหัวหน้าแรก — เกษตรกรนับเฉพาะฟาร์มตัวเอง
+      const mine = farmIds?.length ? animals.filter((a) => farmIds.includes(a.farmId)) : animals
+      const soon = Date.now() + 30 * 86_400_000
+      setHerd({
+        total: mine.filter((a) => a.active).length,
+        nearCalving: mine.filter((a) => a.expectedCalvingAt && a.expectedCalvingAt <= soon).length,
+      })
     })()
     return () => {
       alive = false
     }
-  }, [role, isAdmin])
+  }, [userId, role, isAdmin])
 
-  const thi = heatStress(14)
-  const today = thi[thi.length - 1]
-  const level = heatStressLevel(today.thi)
+  const steps = activitiesForRole(role)
+  // ใบที่ระบบชี้ว่าควรทำก่อน = กิจกรรมของงานที่ใกล้ถึงกำหนดที่สุด
+  const nextCode = buckets?.overdue[0]?.activityCode ?? buckets?.today[0]?.activityCode ?? null
 
   return (
     <>
+      {/* ตัวเลขสรุป — เอาเฉพาะที่มาจากกิจกรรมภาค ก และกำหนดการที่ระบบสร้าง */}
+      {herd && buckets && (
+        <Card title="ภาพรวมวันนี้" hint="ตัวเลขจากข้อมูลในเครื่อง อัปเดตทุกครั้งที่บันทึก">
+          <Stats quad>
+            <Stat label="โคทั้งหมด" value={herd.total} sub="ตัว" />
+            <Stat label="ใกล้คลอด" value={herd.nearCalving} sub="ตัว" tone="warn" />
+            <Stat label="งานวันนี้" value={buckets.today.length} sub="งาน" tone="info" />
+            <Stat
+              label="เลยกำหนด"
+              value={buckets.overdue.length}
+              sub="งาน"
+              tone={buckets.overdue.length > 0 ? 'crit' : 'ok'}
+            />
+          </Stats>
+        </Card>
+      )}
+
+      {/* ขั้นตอนปฏิบัติการของบทบาทนี้ */}
+      {steps.length > 0 && (
+        <Card
+          title="ขั้นตอนปฏิบัติการปศุสัตว์"
+          hint="ทางลัดที่ใช้บ่อย · ดูครบทุกกิจกรรมได้ที่แท็บบันทึก"
+          action={
+            <Link to="/record" className="link-more">
+              ดูทั้งหมด
+            </Link>
+          }
+        >
+          <TileGrid>
+            {steps.slice(0, 3).map((a) => (
+              <Tile
+                key={a.code}
+                to={`/record/${encodeURIComponent(a.code)}`}
+                Icon={activityIcon(a.code)}
+                code={a.code}
+                label={a.name}
+                active={a.code === nextCode}
+              />
+            ))}
+          </TileGrid>
+        </Card>
+      )}
+
       {/* งานเร่งด่วน */}
       {buckets && (buckets.overdue.length > 0 || buckets.today.length > 0) && (
         <Card
           title="งานวันนี้"
           hint={`เลยกำหนด ${buckets.overdue.length} · ถึงกำหนดวันนี้ ${buckets.today.length}`}
-          action={<Link to="/tasks" style={{ fontSize: 13, color: 'var(--brand)' }}>ดูทั้งหมด</Link>}
+          action={<Link to="/tasks" className="link-more">ดูทั้งหมด</Link>}
         >
           <List>
             {[...buckets.overdue.slice(0, 4), ...buckets.today.slice(0, 4)].map((k) => (
@@ -114,7 +162,7 @@ export function Dashboard() {
 
           {heat.expected.length > 0 && (
             <>
-              <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 12 }}>
+              <p className="subhead">
                 คาดว่าจะเป็นสัดช่วงนี้ ({heat.expected.length} ตัว) — ให้สังเกตอาการ
               </p>
               <List>
@@ -122,7 +170,7 @@ export function Dashboard() {
                   <Row
                     key={animal.id}
                     to={`/animals/${animal.id}`}
-                    badge={<AlarmClock size={15} style={{ color: 'var(--warn)' }} />}
+                    badge={<AlarmClock size={15} className="ic-warn" />}
                     title={`${animal.tagNo} · ${animal.breed}`}
                     sub={window ? `คาดการณ์ ${dayShort(window.from)} – ${dayShort(window.to)}` : undefined}
                   />
@@ -130,62 +178,6 @@ export function Dashboard() {
               </List>
             </>
           )}
-        </Card>
-      )}
-
-      {/* ความเครียดจากความร้อน (ค-05) */}
-      <Card title="ดัชนีความเครียดจากความร้อน" hint="THI 14 วันล่าสุด · ค่าสูงกดอัตราการผสมติด">
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 27, fontWeight: 800, fontFamily: 'var(--mono)', color: 'var(--ink)' }}>
-            {today.thi}
-          </span>
-          <Pill tone={level.tone}>{level.label}</Pill>
-          <span style={{ fontSize: 12.5, color: 'var(--muted)', marginLeft: 'auto' }}>
-            <Thermometer size={13} style={{ verticalAlign: -2 }} /> {today.tempMax}°C ·{' '}
-            <Droplets size={13} style={{ verticalAlign: -2 }} /> {today.humidity}%
-          </span>
-        </div>
-        <Spark
-          values={thi.map((d) => d.thi)}
-          tones={thi.map((d) => heatStressLevel(d.thi).tone)}
-          labels={thi.map((d) => `${dayShort(d.at)} THI ${d.thi}`)}
-        />
-      </Card>
-
-      {/* คลังที่ต้องรีบดู */}
-      {role === 'coop' && tankAlert && (
-        <Card title="คลังต้องดูด่วน">
-          <p style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14 }}>
-            <TriangleAlert size={17} style={{ color: 'var(--crit)', flex: 'none' }} />
-            {tankAlert}
-          </p>
-          <div className="row">
-            <Link className="btn" to="/inventory">
-              ไปหน้าคลัง
-            </Link>
-          </div>
-        </Card>
-      )}
-
-      {/* ตัวชี้วัด */}
-      {role === 'coop' && kpis.length > 0 && (
-        <Card
-          title="ตัวชี้วัดด้านการสืบพันธุ์"
-          hint="คำนวณจากบันทึกในระบบ (ค-06)"
-          action={<Link to="/reports" style={{ fontSize: 13, color: 'var(--brand)' }}>รายงาน</Link>}
-        >
-          <div className="stats">
-            {kpis.slice(0, 4).map((k) => (
-              <KpiCard
-                key={k.label}
-                label={k.label}
-                value={k.value}
-                unit={k.unit}
-                target={k.target}
-                higherIsBetter={k.label !== 'ครั้งผสมต่อการติด' && k.label !== 'ระยะห่างการให้ลูก'}
-              />
-            ))}
-          </div>
         </Card>
       )}
 
@@ -203,29 +195,51 @@ export function Dashboard() {
   )
 }
 
+/**
+ * งานหนึ่งใบตามดีไซน์ — วงกลมบอกความเร่งด่วน ชื่องาน ป้ายสถานะ และปุ่มลงมือทำ
+ * วงกลมไม่ใช่ช่องติ๊ก เพราะงานปิดได้ทางเดียวคือบันทึกผลของกิจกรรมนั้นจริง (ASG-07)
+ */
 export function TaskRow({ task }: { task: Task }) {
+  const { userId } = useAccount()
   const overdue = task.status === 'overdue' || task.dueAt < Date.now() - task.toleranceDays * 86_400_000
+  const mine = task.assignedTo === userId
+
+  const tone = task.status === 'escalated' || overdue ? 'crit' : task.priority === 'high' ? 'warn' : 'mute'
+  // บอกเป็นจำนวนวันไปเลย คนหน้างานจะได้รู้ทันทีว่าช้าแค่ไหน ไม่ต้องไปเปิดดูวันนัด
+  const late = daysPast(task.dueAt)
+  const label =
+    task.status === 'escalated'
+      ? `ค้างนาน ${late} วัน`
+      : overdue
+        ? `เลยกำหนด ${late} วัน`
+        : task.priority === 'high'
+          ? 'ด่วน'
+          : 'ตามกำหนด'
+
   return (
-    <Row
-      to={`/record/${encodeURIComponent(task.activityCode)}?task=${task.localId}${
-        task.animalId ? `&animal=${task.animalId}` : ''
-      }`}
-      badge={
-        overdue ? (
-          <Pill tone="crit">เลยกำหนด</Pill>
-        ) : task.priority === 'high' ? (
-          <Pill tone="warn">สำคัญ</Pill>
-        ) : (
-          <span className="code">{task.activityCode}</span>
-        )
-      }
-      title={task.title}
-      sub={
-        <>
-          <CalendarClock size={12} style={{ verticalAlign: -2 }} /> {dayFull(task.dueAt)} ·{' '}
-          {task.derivedFrom}
-        </>
-      }
-    />
+    <li className="task-item">
+      <span className={`task-mark ${tone}`} aria-hidden="true" />
+      <div className="task-body">
+        <div className="task-head">
+          <div className="task-title">{task.title}</div>
+          <Pill tone={tone}>{label}</Pill>
+        </div>
+        <div className="task-sub">
+          <span className="code">{task.activityCode}</span>{' '}
+          <CalendarClock size={12} className="ic-inline" /> {dayFull(task.dueAt)} · {task.derivedFrom}
+          {mine && ' · มอบหมายให้คุณ'}
+        </div>
+        <div className="row snug">
+          <Link
+            className={`btn chiplike ${tone === 'mute' ? '' : tone}`.trim()}
+            to={`/record/${encodeURIComponent(task.activityCode)}?task=${task.localId}${
+              task.animalId ? `&animal=${task.animalId}` : ''
+            }`}
+          >
+            บันทึกผล <span className="go">→</span>
+          </Link>
+        </div>
+      </div>
+    </li>
   )
 }

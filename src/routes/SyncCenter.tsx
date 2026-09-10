@@ -6,8 +6,8 @@
  * ยิ่งค้างนานยิ่งเสี่ยง จึงต้องเห็นอายุของรายการที่ค้างเสมอ
  */
 import { useCallback, useEffect, useState } from 'react'
-import { CloudOff, RefreshCw, Trash2 } from 'lucide-react'
-import { Card, Empty, Field, KeyValues, List, Note, PageHeader, Pill, Row, Skeleton, Stat, Stats } from '../components/ui'
+import { CloudOff, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
+import { Card, Empty, Field, KeyValues, List, Note, PageHeader, Pill, Skeleton, Stat, Stats } from '../components/ui'
 import { db, rebuildCounters } from '../data/db'
 import {
   getRetention,
@@ -86,10 +86,11 @@ export function SyncCenter() {
     <>
       <PageHeader title="ศูนย์ซิงค์" sub="ข้อมูลที่ยังไม่ขึ้นระบบ" />
       <Card title="สถานะการซิงค์">
-        <Stats>
-          <Stat label="รอส่ง" value={num(snap.pending)} sub="รายการ" />
-          <Stat label="ล้มเหลว" value={num(snap.failed)} sub="รายการ" />
-          <Stat label="ขัดแย้ง" value={num(snap.conflict)} sub="รายการ" />
+        <Stats quad>
+          <Stat label="รอส่ง" value={snap.pending} sub="รายการ" tone={snap.pending > 0 ? 'warn' : 'ok'} />
+          <Stat label="ล้มเหลว" value={snap.failed} sub="รายการ" tone={snap.failed > 0 ? 'crit' : undefined} />
+          <Stat label="ขัดแย้ง" value={snap.conflict} sub="รายการ" tone={snap.conflict > 0 ? 'crit' : undefined} />
+          <Stat label="เครือข่าย" value={snap.online ? 'ออนไลน์' : 'ออฟไลน์'} tone={snap.online ? 'ok' : 'warn'} />
         </Stats>
         <KeyValues
           items={[
@@ -102,17 +103,33 @@ export function SyncCenter() {
 
         {!snap.online && (
           <Note>
-            <CloudOff size={14} style={{ verticalAlign: -2 }} /> ตอนนี้ออฟไลน์ — บันทึกต่อได้ตามปกติ
+            <CloudOff size={14} className="ic-inline" /> ตอนนี้ออฟไลน์ — บันทึกต่อได้ตามปกติ
             ระบบจะส่งให้เองเมื่อกลับมามีสัญญาณ
           </Note>
         )}
 
+        {/* OFF-07 — เตือนสองเกณฑ์: ค้างมากเกินไป และค้างนานเกินไป */}
+        {snap.pending > policy.warnPendingOver && (
+          <div className="advice warn">
+            <TriangleAlert size={17} className="ic" />
+            <div>
+              <b>ค้างส่งเกินเกณฑ์</b>
+              มี {num(snap.pending)} รายการรอส่ง เกินเกณฑ์ {num(policy.warnPendingOver)} รายการ —
+              ยิ่งค้างมาก ยิ่งเสี่ยงหายพร้อมเครื่อง
+            </div>
+          </div>
+        )}
+
         {snap.oldestPendingAt &&
           Date.now() - snap.oldestPendingAt > policy.warnAgeHours * 3_600_000 && (
-            <Note>
-              มีรายการค้างนานเกิน {policy.warnAgeHours} ชั่วโมง — ถ้าเครื่องหายหรือพังตอนนี้
-              ข้อมูลส่วนนี้จะหายไปด้วย ควรหาสัญญาณแล้วกดส่ง
-            </Note>
+            <div className="advice crit">
+              <TriangleAlert size={17} className="ic" />
+              <div>
+                <b>ค้างนานเกินเกณฑ์</b>
+                รายการเก่าสุดค้างมา {age(snap.oldestPendingAt)} เกินเกณฑ์ {policy.warnAgeHours} ชั่วโมง —
+                ถ้าเครื่องหายหรือพังตอนนี้ ข้อมูลส่วนนี้จะหายไปด้วย ควรหาสัญญาณแล้วกดส่ง
+              </div>
+            </div>
           )}
 
         <div className="row">
@@ -141,7 +158,7 @@ export function SyncCenter() {
           <List>
             {conflicts.map((r) => (
               <li key={r.localId}>
-                <div style={{ padding: '11px 2px' }}>
+                <div className="feed-item">
                   <div className="row-title">
                     <span className="code">{r.activityCode}</span>
                     {ACTIVITY_BY_CODE.get(r.activityCode)?.name ?? r.activityCode}
@@ -150,7 +167,7 @@ export function SyncCenter() {
                   <div className="row-sub">
                     {dateTime(r.occurredAt)} · บันทึกโดย {r.recordedBy}
                   </div>
-                  <div className="row" style={{ marginTop: 8 }}>
+                  <div className="row snug">
                     <button
                       className="btn ghost"
                       onClick={() => void resolveConflict(r.id!, 'keep-local').then(load)}
@@ -238,14 +255,13 @@ export function SyncCenter() {
             onChange={(e) => setPolicy({ ...policy, warnAgeHours: Number(e.target.value) })}
           />
         </Field>
-        <label className="field" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <label className="field check">
           <input
             type="checkbox"
             checked={policy.dropPhotosAfterSync}
             onChange={(e) => setPolicy({ ...policy, dropPhotosAfterSync: e.target.checked })}
-            style={{ width: 20, height: 20, accentColor: 'var(--brand)' }}
           />
-          <span style={{ margin: 0, color: 'var(--ink)', fontSize: 14 }}>
+          <span>
             ลบรูปออกจากเครื่องทันทีที่ส่งขึ้นเซิร์ฟเวอร์แล้ว
           </span>
         </label>
@@ -272,9 +288,4 @@ export function SyncCenter() {
       )}
     </>
   )
-}
-
-/** แถวสรุปสำหรับใช้ซ้ำในหน้าอื่น */
-export function PendingRow({ label, count }: { label: string; count: number }) {
-  return <Row title={label} side={num(count)} />
 }
