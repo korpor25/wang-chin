@@ -28,6 +28,21 @@ export const ACCOUNTS: Account[] = [
   { userId: 'u_board', name: 'ประสิทธิ์ คำมูล', role: 'coop', phone: '081-000-0004', readOnly: true, isAdmin: false },
 ]
 
+/**
+ * พากลับไปตั้งต้นที่หน้าแรกก่อนสลับบัญชี
+ *
+ * หน้าเข้าสู่ระบบอยู่นอก Router พอเข้าสู่ระบบใหม่ Router จึงถูกสร้างใหม่ทั้งตัว
+ * แล้วอ่าน URL ที่ยังค้างอยู่บนแถบที่อยู่ ผู้ใช้เลยไปโผล่หน้าเดิมของบัญชีก่อนหน้า
+ * ซึ่งบทบาทใหม่อาจไม่มีสิทธิ์เข้าด้วยซ้ำ จึงเจอการ์ด "ไม่มีสิทธิ์เข้าถึง" แทน
+ */
+function resetToHome() {
+  try {
+    if (window.location.pathname !== '/') window.history.replaceState(null, '', '/')
+  } catch {
+    // เบราว์เซอร์บางตัวในโหมดจำกัดสิทธิ์เขียนประวัติไม่ได้ ข้ามไปได้ ไม่กระทบการเข้าสู่ระบบ
+  }
+}
+
 interface SessionState {
   account: Account | null
   ready: boolean
@@ -56,6 +71,7 @@ export const useSession = create<SessionState>((set) => ({
     } catch {
       // จำข้ามรอบไม่ได้ก็ยังใช้งานรอบนี้ได้
     }
+    resetToHome()
     set({ account })
   },
   signOut() {
@@ -64,6 +80,7 @@ export const useSession = create<SessionState>((set) => ({
     } catch {
       // ไม่มีอะไรต้องทำ
     }
+    resetToHome()
     set({ account: null })
   },
 }))

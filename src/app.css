@@ -1803,60 +1803,42 @@ table.data td.num {
 }
 
 /* แถบอธิบายกลุ่มคะแนน
-   หลอดเดียวยาวแนวนอน แบ่งสามช่วงกว้างเท่ากัน วางใต้ตาราง 9 ช่องพอดี
+   หลอดแบนยาวแนวนอน แบ่งสามช่วงกว้างเท่ากัน วางใต้ตาราง 9 ช่องพอดี
    ตำแหน่งจึงบอกเองว่ากลุ่มไหนคือเลขอะไร ไม่ต้องเขียนกำกับให้รก
-   ความนูนมาจากไล่สีในตัวหลอดกับเงาด้านใน ไม่ได้ใช้ภาพประกอบ */
+
+   พื้นใช้สีอ่อนแล้วเขียนด้วยสีเข้ม ไม่ใช่ตัวขาวบนพื้นสีทึบ
+   เพราะตัวขาวบนพื้นเขียวได้คอนทราสต์แค่ราว 3:1 อ่านยากกลางแดด
+   แบบนี้ได้เกิน 10:1 ทุกช่วง และยังแยกกลุ่มด้วยสีได้เหมือนเดิม */
 .band-legend {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
   margin-top: var(--sp-3);
   border-radius: var(--r-pill);
   overflow: hidden;
-  box-shadow:
-    inset 0 -2px 4px rgba(0, 0, 0, 0.14),
-    0 1px 2px rgba(16, 38, 26, 0.14),
-    0 2px 6px -3px rgba(16, 38, 26, 0.22);
 }
 
 .band-seg {
-  position: relative;
-  padding: 5px var(--sp-2);
-  font-size: var(--fs-xxs);
-  font-weight: var(--fw-medium);
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
   text-align: center;
-  color: #fff;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
-  /* เส้นสว่างพาดบนหนึ่งในสาม ให้ดูเป็นผิวหลอดกลม */
-  background-image: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.34) 0%,
-    rgba(255, 255, 255, 0.12) 38%,
-    rgba(0, 0, 0, 0.06) 62%,
-    rgba(0, 0, 0, 0.16) 100%
-  );
-}
-
-/* เส้นคั่นบาง ๆ ระหว่างช่วง ให้เห็นรอยต่อโดยไม่ตัดหลอดขาด */
-.band-seg + .band-seg::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.35);
+  line-height: 1.4;
 }
 
 .band-seg.thin {
-  background-color: var(--crit);
+  background: var(--crit-bg);
+  color: var(--crit);
 }
 
 .band-seg.ideal {
-  background-color: var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok);
 }
 
 .band-seg.fat {
-  background-color: var(--info);
+  background: var(--info-bg);
+  color: var(--info);
 }
 
 /* ── กล่องอธิบายคะแนนที่เลือก ── */
