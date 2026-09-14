@@ -11,6 +11,7 @@
  */
 import { bumpCounter, db, getSetting, newLocalId, setSetting } from './db'
 import type { ActivityRecord, OutboxItem, SyncStatus } from '../domain/types'
+import { authToken, forceSignOut } from '../state/session'
 
 const DAY = 86_400_000
 
@@ -124,11 +125,53 @@ async function pushOne(item: OutboxItem): Promise<'ok' | 'conflict' | 'error'> {
   try {
     const body = await payloadFor(item)
     if (!body) return 'ok' // ของถูกลบไปแล้ว ไม่มีอะไรต้องส่ง
+    const token = authToken()
+
+    // รูปส่งเป็น multipart — ไฟล์ไบนารีส่งผ่าน JSON ไม่ได้ (อัปขึ้น object storage ที่เซิร์ฟเวอร์)
+    if (item.table === 'photos') {
+      const photo = body as {
+        localId: string
+        recordLocalId: string | null
+        blob: Blob
+        width: number
+        height: number
+        at: number
+      }
+      const fd = new FormData()
+      fd.append('op', item.op)
+      fd.append('localId', photo.localId)
+      fd.append('recordLocalId', photo.recordLocalId ?? '')
+      fd.append('width', String(photo.width ?? 0))
+      fd.append('height', String(photo.height ?? 0))
+      fd.append('at', String(photo.at ?? 0))
+      if (item.op !== 'delete' && photo.blob) fd.append('file', photo.blob, `${photo.localId}.jpg`)
+      // ไม่ตั้ง content-type เอง — เบราว์เซอร์จะใส่ boundary ของ multipart ให้
+      const pres = await fetch(`${API_URL}/sync/photos`, {
+        method: 'POST',
+        headers: { ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: fd,
+      })
+      if (pres.status === 401) {
+        forceSignOut()
+        return 'error'
+      }
+      return pres.ok ? 'ok' : 'error'
+    }
+
     const res = await fetch(`${API_URL}/sync/${item.table}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        // แนบ JWT ที่ได้จาก /auth/login — เซิร์ฟเวอร์บังคับยืนยันตัวตน (SEC-06)
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ op: item.op, localId: item.refLocalId, data: body }),
     })
+    // โทเคนหมดอายุ/ไม่ถูกต้อง — ออกจากระบบให้ผู้ใช้เข้าใหม่ แล้วค่อยลองส่งรอบหน้า
+    if (res.status === 401) {
+      forceSignOut()
+      return 'error'
+    }
     if (res.status === 409) {
       // เก็บฉบับของเซิร์ฟเวอร์ไว้ให้หน้าจอเทียบ ห้ามทับเงียบ ๆ
       const server = await res.json().catch(() => null)
@@ -178,6 +221,8 @@ export async function runSync(limit = 50): Promise<SyncOutcome> {
       if (isRecord) {
         await markRecord(item.refLocalId, 'synced')
         await bumpCounter('records.pending', -1)
+      } else if (item.table === 'photos') {
+        await markPhoto(item.refLocalId, 'synced')
       }
       await db.outbox.delete(item.id!)
       await bumpCounter('outbox.size', -1)
@@ -218,6 +263,12 @@ async function markRecord(localId: string, status: SyncStatus) {
   const rec = await db.records.where('localId').equals(localId).first()
   if (!rec?.id) return
   await db.records.update(rec.id, { syncStatus: status, lastModified: Date.now() })
+}
+
+async function markPhoto(localId: string, status: SyncStatus) {
+  const photo = await db.photos.where('localId').equals(localId).first()
+  if (!photo?.id) return
+  await db.photos.update(photo.id, { syncStatus: status })
 }
 
 // ── ความขัดแย้ง ──────────────────────────────────────────────────────────

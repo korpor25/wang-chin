@@ -1,13 +1,12 @@
 /**
- * หน้าเข้าสู่ระบบ
+ * หน้าเข้าสู่ระบบ — ยืนยันตัวตนจริงด้วยเบอร์โทร + รหัสผ่านผ่าน API (/auth/login)
  *
- * ดีไซน์วางไว้เป็นเบอร์โทร + รหัสผ่าน แต่ระบบยังไม่มี auth จริง (P0 ข้อ 8 · Q7 เรื่อง OTP ยังไม่สรุป)
- * หน้านี้จึงทำหัวและกรอบตามดีไซน์ไว้ก่อน แล้วให้เลือกบัญชีในเครื่องแทนช่องกรอก
- * เมื่อผูก auth จริงแล้วเปลี่ยนเฉพาะส่วนในกรอบ ไม่ต้องรื้อหน้า
+ * ปุ่มบัญชีเดโมด้านล่างช่วยกดเข้าใช้เร็วในเครื่องทดสอบ (เติมเบอร์+รหัสให้แล้วยิงเข้าเลย)
+ * เมื่อไม่ได้ตั้ง VITE_API_URL ระบบจะเข้าโหมดเดโมออฟไลน์โดยอัตโนมัติ
  */
 import { useEffect, useState } from 'react'
-import { ChevronRight } from 'lucide-react'
-import { ACCOUNTS, useSession } from '../state/session'
+import { ChevronRight, LogIn } from 'lucide-react'
+import { DEMO_ACCOUNTS, useSession } from '../state/session'
 import { ROLE_LABEL } from '../domain/types'
 import { db } from '../data/db'
 import { computeKpis } from '../data/queries'
@@ -17,6 +16,10 @@ const INITIALS = (name: string) => name.trim().charAt(0)
 
 export function Login() {
   const signIn = useSession((s) => s.signIn)
+  const loading = useSession((s) => s.loading)
+  const error = useSession((s) => s.error)
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
   const [stats, setStats] = useState<{ animals: number; farms: number; concept: number } | null>(null)
 
   // ตัวเลขบนหัวหน้าจอมาจากข้อมูลจริงในเครื่อง ไม่ใช่เลขตัวอย่างที่ตายตัว
@@ -34,6 +37,19 @@ export function Login() {
       })
     })()
   }, [])
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (loading) return
+    await signIn(phone, password)
+  }
+
+  // กดบัญชีเดโม = เติมค่าแล้วเข้าเลย
+  const useDemo = async (p: string, pw: string) => {
+    setPhone(p)
+    setPassword(pw)
+    await signIn(p, pw)
+  }
 
   return (
     <div className="login">
@@ -62,12 +78,55 @@ export function Login() {
       <section className="card">
         <span className="login-chip">เข้าสู่ระบบใช้งาน</span>
         <h2>ยินดีต้อนรับกลับสู่ระบบ</h2>
-        <p className="hint">เลือกบัญชีที่จะใช้บนอุปกรณ์นี้ — ระบบยังไม่ได้ผูกกับการยืนยันตัวตนจริง</p>
+        <p className="hint">กรอกเบอร์โทรและรหัสผ่านที่ได้รับจากสหกรณ์</p>
 
+        <form className="login-form" onSubmit={submit}>
+          <label className="field">
+            <span>เบอร์โทรศัพท์</span>
+            <input
+              type="tel"
+              inputMode="tel"
+              autoComplete="username"
+              placeholder="0810000000"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>รหัสผ่าน</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+
+          {error && (
+            <p className="login-error" style={{ color: '#dc2626', fontSize: 'var(--fs-xs)', margin: '2px 0 0' }}>
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className="btn full"
+            style={{ marginTop: 'var(--sp-3)' }}
+            disabled={loading || !phone || !password}
+          >
+            <LogIn size={18} />
+            {loading ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}
+          </button>
+        </form>
+
+        <p className="hint" style={{ marginTop: 18 }}>
+          หรือเลือกบัญชีทดสอบ (รหัส 123456)
+        </p>
         <ul className="login-list">
-          {ACCOUNTS.map((a) => (
-            <li key={a.userId}>
-              <button onClick={() => signIn(a.userId)}>
+          {DEMO_ACCOUNTS.map((a) => (
+            <li key={a.phone}>
+              <button onClick={() => useDemo(a.phone, a.password)} disabled={loading}>
                 <span className="avatar flush" aria-hidden="true">
                   {INITIALS(a.name)}
                 </span>

@@ -1,8 +1,11 @@
-/** บัญชีผู้ใช้ที่กำลังใช้งานอยู่ */
+/** บัญชีผู้ใช้ที่กำลังใช้งานอยู่ — ยืนยันตัวตนจริงผ่าน API (/auth/login) แล้วถือ JWT ไว้ */
 import { create } from 'zustand'
 import type { Role } from '../domain/types'
 
 const KEY = 'wangchin.session'
+
+/** ปลายทาง API เดียวกับที่ตัวซิงค์ใช้ — ไม่ตั้ง VITE_API_URL = โหมดเดโมออฟไลน์ (ไม่มีโทเคน) */
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 
 export interface Account {
   userId: string
@@ -13,40 +16,55 @@ export interface Account {
   readOnly: boolean
   /** เข้าหน้าตั้งค่าระบบและเครื่องมือผู้ดูแลได้ */
   isAdmin: boolean
+  /** ฟาร์มที่ผูกกับบัญชี (เกษตรกรเห็นเฉพาะของตัวเอง — SEC-01) */
+  farmIds: string[]
+  active: boolean
+  /** JWT จาก backend — แนบไปกับทุกคำขอที่ต้องยืนยันตัวตน (ว่าง = โหมดเดโมออฟไลน์) */
+  token: string
 }
 
 /**
- * รายชื่อบัญชีในเครื่องนี้
- * เมื่อเชื่อม Supabase Auth แล้ว ให้แทนที่ด้วยข้อมูลจาก session จริง
- * และเปลี่ยนหน้าเข้าสู่ระบบเป็นอีเมล/รหัสผ่านตามที่ระบบรองรับ
+ * บัญชีเดโมสำหรับกดเข้าใช้เร็วในเครื่องทดสอบ (รหัส dev ทุกบัญชี = 123456)
+ * โหมดจริง: ปุ่มจะเติมเบอร์+รหัสให้แล้วยิง /auth/login · โหมดออฟไลน์: เข้าใช้ในเครื่องเลย
  */
-export const ACCOUNTS: Account[] = [
-  { userId: 'u_husb', name: 'อนุชา วงศ์ใหญ่', role: 'husbandry', phone: '081-000-0002', readOnly: false, isAdmin: false },
-  { userId: 'u_farmer', name: 'สมชาย ใจดี', role: 'farmer', phone: '081-000-0001', readOnly: false, isAdmin: false },
-  { userId: 'u_coop', name: 'วิไล ศรีบุญเรือง', role: 'coop', phone: '081-000-0003', readOnly: false, isAdmin: true },
-  // กรรมการสหกรณ์ใช้บัญชีเจ้าหน้าที่แบบดูอย่างเดียว ไม่ต้องมีบทบาทแยก
-  { userId: 'u_board', name: 'ประสิทธิ์ คำมูล', role: 'coop', phone: '081-000-0004', readOnly: true, isAdmin: false },
+export interface DemoAccount {
+  name: string
+  role: Role
+  phone: string
+  readOnly: boolean
+  isAdmin: boolean
+  password: string
+}
+
+export const DEMO_ACCOUNTS: DemoAccount[] = [
+  { name: 'อนุชา วงศ์ใหญ่', role: 'husbandry', phone: '0810000002', readOnly: false, isAdmin: false, password: '123456' },
+  { name: 'สมชาย ใจดี', role: 'farmer', phone: '0810000001', readOnly: false, isAdmin: false, password: '123456' },
+  { name: 'วิไล ศรีบุญเรือง', role: 'coop', phone: '0810000003', readOnly: false, isAdmin: true, password: '123456' },
+  { name: 'ประสิทธิ์ คำมูล', role: 'coop', phone: '0810000004', readOnly: true, isAdmin: false, password: '123456' },
 ]
 
 /**
  * พากลับไปตั้งต้นที่หน้าแรกก่อนสลับบัญชี
- *
  * หน้าเข้าสู่ระบบอยู่นอก Router พอเข้าสู่ระบบใหม่ Router จึงถูกสร้างใหม่ทั้งตัว
- * แล้วอ่าน URL ที่ยังค้างอยู่บนแถบที่อยู่ ผู้ใช้เลยไปโผล่หน้าเดิมของบัญชีก่อนหน้า
- * ซึ่งบทบาทใหม่อาจไม่มีสิทธิ์เข้าด้วยซ้ำ จึงเจอการ์ด "ไม่มีสิทธิ์เข้าถึง" แทน
+ * แล้วอ่าน URL ที่ยังค้างอยู่ ผู้ใช้เลยไปโผล่หน้าเดิมของบัญชีก่อนหน้าที่อาจไม่มีสิทธิ์
  */
 function resetToHome() {
   try {
     if (window.location.pathname !== '/') window.history.replaceState(null, '', '/')
   } catch {
-    // เบราว์เซอร์บางตัวในโหมดจำกัดสิทธิ์เขียนประวัติไม่ได้ ข้ามไปได้ ไม่กระทบการเข้าสู่ระบบ
+    // เบราว์เซอร์บางตัวในโหมดจำกัดสิทธิ์เขียนประวัติไม่ได้ ข้ามไปได้
   }
 }
+
+const onlyDigits = (s: string) => s.replace(/\D/g, '')
 
 interface SessionState {
   account: Account | null
   ready: boolean
-  signIn: (userId: string) => void
+  loading: boolean
+  error: string | null
+  /** เข้าสู่ระบบด้วยเบอร์โทร+รหัสผ่าน คืน true เมื่อสำเร็จ */
+  signIn: (phone: string, password: string) => Promise<boolean>
   signOut: () => void
   restore: () => void
 }
@@ -54,26 +72,84 @@ interface SessionState {
 export const useSession = create<SessionState>((set) => ({
   account: null,
   ready: false,
+  loading: false,
+  error: null,
+
   restore() {
     let account: Account | null = null
     try {
       const raw = localStorage.getItem(KEY)
-      if (raw) account = ACCOUNTS.find((a) => a.userId === raw) ?? null
+      if (raw) account = JSON.parse(raw) as Account
     } catch {
       // โหมดส่วนตัวอ่านค่าไม่ได้ ให้เข้าสู่ระบบใหม่
     }
     set({ account, ready: true })
   },
-  signIn(userId) {
-    const account = ACCOUNTS.find((a) => a.userId === userId) ?? null
-    try {
-      if (account) localStorage.setItem(KEY, account.userId)
-    } catch {
-      // จำข้ามรอบไม่ได้ก็ยังใช้งานรอบนี้ได้
+
+  async signIn(phone, password) {
+    const digits = onlyDigits(phone)
+    set({ loading: true, error: null })
+
+    // โหมดเดโมออฟไลน์ — ไม่มี backend ให้ยืนยันตัวตนในเครื่องจากบัญชีเดโม
+    if (!API_URL) {
+      const demo = DEMO_ACCOUNTS.find((a) => a.phone === digits)
+      if (!demo || password !== demo.password) {
+        set({ loading: false, error: 'เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง' })
+        return false
+      }
+      const account: Account = {
+        userId: `demo_${demo.phone}`,
+        name: demo.name,
+        role: demo.role,
+        phone: demo.phone,
+        readOnly: demo.readOnly,
+        isAdmin: demo.isAdmin,
+        farmIds: [],
+        active: true,
+        token: '',
+      }
+      persist(account)
+      resetToHome()
+      set({ account, loading: false, error: null })
+      return true
     }
-    resetToHome()
-    set({ account })
+
+    // โหมดจริง — ยืนยันตัวตนที่เซิร์ฟเวอร์แล้วรับ JWT
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ phone: digits, password }),
+      })
+      if (!res.ok) {
+        set({ loading: false, error: 'เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง' })
+        return false
+      }
+      const body = (await res.json()) as {
+        data: { token: string; user: Omit<Account, 'token'> & { id: string } }
+      }
+      const u = body.data.user
+      const account: Account = {
+        userId: u.id,
+        name: u.name,
+        role: u.role,
+        phone: u.phone,
+        readOnly: u.readOnly,
+        isAdmin: u.isAdmin,
+        farmIds: u.farmIds ?? [],
+        active: u.active,
+        token: body.data.token,
+      }
+      persist(account)
+      resetToHome()
+      set({ account, loading: false, error: null })
+      return true
+    } catch {
+      set({ loading: false, error: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบว่า API ทำงานอยู่' })
+      return false
+    }
   },
+
   signOut() {
     try {
       localStorage.removeItem(KEY)
@@ -81,9 +157,28 @@ export const useSession = create<SessionState>((set) => ({
       // ไม่มีอะไรต้องทำ
     }
     resetToHome()
-    set({ account: null })
+    set({ account: null, error: null })
   },
 }))
+
+function persist(account: Account) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(account))
+  } catch {
+    // จำข้ามรอบไม่ได้ก็ยังใช้งานรอบนี้ได้
+  }
+}
+
+/** โทเคนปัจจุบันสำหรับแนบใน Authorization header (ใช้จากนอก React ได้ เช่นตัวซิงค์) */
+export function authToken(): string | null {
+  const t = useSession.getState().account?.token
+  return t ? t : null
+}
+
+/** ให้ตัวซิงค์แจ้งเมื่อโทเคนหมดอายุ/ไม่ถูกต้อง (401) → บังคับเข้าสู่ระบบใหม่ */
+export function forceSignOut() {
+  useSession.getState().signOut()
+}
 
 /** ใช้ในหน้าที่การันตีแล้วว่าเข้าสู่ระบบอยู่ */
 export function useAccount(): Account {

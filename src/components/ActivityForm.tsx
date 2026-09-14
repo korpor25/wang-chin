@@ -14,7 +14,7 @@ import { CYCLE_LABEL } from '../domain/types'
 import type { Animal, BioParams, SemenBatch } from '../domain/types'
 import { Card, Empty, Field, Note, PageHeader, SearchBox } from './ui'
 import { db, newLocalId } from '../data/db'
-import { saveRecord } from '../data/sync'
+import { enqueue, saveRecord } from '../data/sync'
 import { applyEffects, closeTask } from '../data/effects'
 import { getParams, recentAnimals, searchAnimals } from '../data/queries'
 import { breedingBlockers } from '../domain/rules'
@@ -186,6 +186,8 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
           syncStatus: 'pending',
         })
         photoIds.push(id)
+        // เข้าคิวส่งรูปขึ้น object storage (แยกจาก record — ส่งเป็น multipart)
+        await enqueue('photos', 'create', p.id, p.bytes)
       }
 
       await saveRecord({
