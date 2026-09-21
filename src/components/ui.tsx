@@ -205,7 +205,7 @@ export function SearchBox({
   )
 }
 
-export function Chips<T extends string>({
+export function Chips<T extends string | number>({
   value,
   options,
   onChange,
