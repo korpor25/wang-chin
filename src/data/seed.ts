@@ -171,7 +171,7 @@ async function seed(force = false) {
         damId: null,
         sireCode: pick(SIRES, i)[0],
         stage,
-        parity: stage === 'heifer' ? 0 : 1 + (i % 5),
+        parity: stage === 'heifer' ? [0, 0, 0, 1, 1, 2, 3, 4, 5, 6][k % 10] : 1 + (i % 5),
         lastCalvingAt: lastCalving,
         lastHeatAt:
           stage === 'waiting' ? t - ((i % 20) + 1) * DAY * 0.5 : null,

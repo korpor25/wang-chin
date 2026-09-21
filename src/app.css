@@ -1205,6 +1205,15 @@ table.data td.num {
   accent-color: var(--brand);
 }
 
+.field.check.tight {
+  margin-top: var(--sp-1);
+}
+
+.field.check.tight input {
+  min-height: 0;
+  padding: 0;
+}
+
 .check span {
   margin: 0;
   color: var(--ink);

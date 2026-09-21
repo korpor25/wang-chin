@@ -191,6 +191,8 @@ export interface AnimalFilter {
   q?: string
   farmId?: string
   stage?: Animal['stage'] | 'all'
+  /** จำนวนครั้งที่ท้อง ใช้กรองโคสาวตามสถานะการท้อง */
+  parity?: number
   limit?: number
 }
 
@@ -201,6 +203,7 @@ export async function searchAnimals(f: AnimalFilter): Promise<Animal[]> {
 
   let rows = await coll.limit(f.farmId || f.stage ? 5000 : 5000).toArray()
   if (f.stage && f.stage !== 'all') rows = rows.filter((a) => a.stage === f.stage)
+  if (f.parity !== undefined) rows = rows.filter((a) => a.parity === f.parity)
   if (f.q) {
     const q = f.q.trim().toLowerCase()
     rows = rows.filter(

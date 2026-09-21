@@ -575,7 +575,7 @@ function FieldInput({
     return (
       <Field label={label} hint={hint}>
         {(f.options ?? []).map((o) => (
-          <label key={o} className="field check">
+          <label key={o} className="field check tight">
             <input
               type="checkbox"
               checked={picked.includes(o)}

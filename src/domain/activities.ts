@@ -299,7 +299,7 @@ export const ACTIVITIES: ActivitySpec[] = [
         type: 'checklist',
         options: ['ยืนนิ่งให้ขึ้นทับ', 'ขึ้นทับตัวอื่น', 'เมือกใส', 'บวมแดง', 'กระวนกระวาย'],
       },
-      { key: 'reporterType', label: 'ประเภทของผู้พบ', type: 'select', options: ['สัตวบาล', 'เกษตรกร'] },
+      { key: 'reporterType', label: 'ผู้พบ', type: 'select', options: ['สัตวบาล', 'เกษตรกร'] },
       // ขั้นยืนยันตามมติ [22:41] — คำแจ้งของเกษตรกรต้องผ่านสัตวบาลก่อนจึงจะเกิดงานผสม
       {
         key: 'verdict',

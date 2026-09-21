@@ -93,7 +93,7 @@ function nextStep(a: Animal, p: BioParams | null): NextStep {
       }
     case 'heifer':
       return {
-        line: `โคสาว อายุ ${animalAge(a.birthDate)} · ยังไม่เคยให้ลูก`,
+        line: `โคสาว อายุ ${animalAge(a.birthDate)} · ${parityLabel(a.parity)}`,
         action: 'ให้คะแนน BCS',
         code: 'ก-03',
         to: form('ก-03', a.id),
@@ -122,6 +122,12 @@ const STAGE_OPTIONS: Array<{ value: StageFilter; label: string }> = [
   { value: 'problem', label: CYCLE_LABEL.problem },
 ]
 
+/** ตัวกรองย่อยของโคสาว — สถานะการท้องตามจำนวนครั้ง (ไม่เคยท้อง ถึง ท้อง 6) */
+const PARITY_OPTIONS: Array<{ value: number | 'all'; label: string }> = [
+  { value: 'all', label: 'ทุกสถานะการท้อง' },
+  ...[0, 1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: parityLabel(n) })),
+]
+
 const STAGE_TONE: Record<CycleStage, 'ok' | 'warn' | 'crit' | 'mute'> = {
   heifer: 'mute',
   fresh: 'warn',
@@ -142,6 +148,7 @@ export function Animals() {
   const { role } = useAccount()
   const [q, setQ] = useState('')
   const [stage, setStage] = useState<StageFilter>('all')
+  const [parity, setParity] = useState<number | 'all'>('all')
   const [farmId, setFarmId] = useState('')
   const [rows, setRows] = useState<Animal[]>([])
   const [farms, setFarms] = useState<Farm[]>([])
@@ -156,13 +163,19 @@ export function Animals() {
 
   useEffect(() => {
     let alive = true
-    void searchAnimals({ q, stage, farmId: farmId || undefined, limit: 120 }).then((r) => {
+    void searchAnimals({
+      q,
+      stage,
+      farmId: farmId || undefined,
+      parity: stage === 'heifer' && parity !== 'all' ? parity : undefined,
+      limit: 120,
+    }).then((r) => {
       if (alive) setRows(r)
     })
     return () => {
       alive = false
     }
-  }, [q, stage, farmId])
+  }, [q, stage, farmId, parity])
 
   const farmName = useMemo(() => new Map(farms.map((f) => [f.id, f.name])), [farms])
 
@@ -171,6 +184,7 @@ export function Animals() {
       <Card title="ทะเบียนโค" hint={`ทั้งหมด ${num(total)} ตัว`}>
         <SearchBox value={q} onChange={setQ} placeholder="ค้นด้วย RFID เบอร์หู หรือสายพันธุ์" />
         <Chips value={stage} options={STAGE_OPTIONS} onChange={setStage} />
+        {stage === 'heifer' && <Chips value={parity} options={PARITY_OPTIONS} onChange={setParity} />}
         <label className="field">
           <span>ฟาร์ม</span>
           <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
