@@ -103,7 +103,7 @@ export function tasksAfterCalving(calvedAt: number, p: BioParams): DerivedTask[]
     },
     {
       activityCode: 'ก-13',
-      title: 'ทำลายเขาและติดเบอร์หู RFID ลูกโค',
+      title: 'สูญเขาและติดเบอร์หู RFID ลูกโค',
       dueAt: addDays(calvedAt, 14),
       toleranceDays: 3,
       assignedRole: 'husbandry',

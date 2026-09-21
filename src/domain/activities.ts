@@ -450,7 +450,7 @@ export const ACTIVITIES: ActivitySpec[] = [
     group: 'field',
     actors: ['husbandry'],
     trigger: 'ครบ 2 สัปดาห์หลังคลอด ตามกำหนดการที่ระบบสร้าง',
-    detail: 'ทำลายเขาลูกโคและติดเบอร์หู RFID ให้ลูกโค เพื่อขึ้นทะเบียนตัวสัตว์',
+    detail: 'สูญเขาลูกโคและติดเบอร์หู RFID ให้ลูกโค เพื่อขึ้นทะเบียนตัวสัตว์',
     needsAnimal: true,
     fields: [
       { key: 'doneAt', label: 'วันที่ดำเนินการ', type: 'date', required: true },
@@ -459,12 +459,12 @@ export const ACTIVITIES: ActivitySpec[] = [
         label: 'สิ่งที่ดำเนินการแล้ว',
         type: 'checklist',
         required: true,
-        options: ['ทำลายเขาลูกโค', 'ติดเบอร์หู RFID'],
+        options: ['สูญเขาลูกโค', 'ติดเบอร์หู RFID'],
       },
       { key: 'calfRfid', label: 'หมายเลข RFID ที่ติดให้ลูกโค', type: 'text' },
       WHO,
     ],
-    derived: ['ทะเบียนลูกโคที่ติดเบอร์หูแล้ว', 'รายการลูกโคที่ยังไม่ได้ทำลายเขา'],
+    derived: ['ทะเบียนลูกโคที่ติดเบอร์หูแล้ว', 'รายการลูกโคที่ยังไม่ได้สูญเขา'],
   },
 
   // ── ข · คลังและทรัพย์สิน ──────────────────────────────────────────────

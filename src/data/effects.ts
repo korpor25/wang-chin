@@ -165,7 +165,7 @@ export async function applyEffects(
         animalId,
         farmId: animal?.farmId ?? null,
       })
-      out.messages.push('ส่งแจ้งเตือนให้เกษตรกรและสัตวบาลเรื่องป้อนนมน้ำเหลืองลูกโคภายใน 12 ชม. และตั้งงานทำลายเขา/ติดเบอร์หู RFID เมื่อครบ 2 สัปดาห์')
+      out.messages.push('ส่งแจ้งเตือนให้เกษตรกรและสัตวบาลเรื่องป้อนนมน้ำเหลืองลูกโคภายใน 12 ชม. และตั้งงานสูญเขา/ติดเบอร์หู RFID เมื่อครบ 2 สัปดาห์')
       const birthStatus = Array.isArray(payload.birthStatus) ? payload.birthStatus : []
       if (birthStatus.includes('รกค้าง'))
         out.messages.push('พบรกค้าง — ระบบทำเครื่องหมายเฝ้าระวังมดลูกอักเสบไว้')
