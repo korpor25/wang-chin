@@ -13,9 +13,11 @@ import {
   Fence,
   HeartPulse,
   Megaphone,
+  Milk,
   Scan,
   Stethoscope,
   Syringe,
+  Tag,
 } from 'lucide-react'
 
 export type IconType = typeof Baby
@@ -24,14 +26,16 @@ const BY_CODE: Record<string, IconType> = {
   'ก-01': Megaphone, // แจ้งการคลอด
   'ก-02': Baby, // ทำคลอด
   'ก-03': ChartNoAxesColumn, // ให้คะแนน BCS
-  'ก-04': Stethoscope, // ตรวจอวัยวะสืบพันธุ์
+  'ก-04': Stethoscope, // ตรวจระบบสืบพันธุ์
   'ก-05': ClipboardCheck, // ตรวจความพร้อม
   'ก-06': Syringe, // โปรแกรมเหนี่ยวนำ
   'ก-07': Eye, // ตรวจและแจ้งอาการเป็นสัด
   'ก-08': Droplet, // ผสมเทียม
-  'ก-09': Scan, // ตรวจครรภ์
+  'ก-09': Scan, // ตรวจท้อง
   'ก-10': HeartPulse, // ตรวจโรคและรักษา
   'ก-11': Fence, // เตรียมคอกคลอด
+  'ก-12': Milk, // ป้อนนมน้ำเหลือง
+  'ก-13': Tag, // ดูแลลูกโค 2 สัปดาห์
 }
 
 export function activityIcon(code: string): IconType {

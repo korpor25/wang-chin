@@ -1,5 +1,5 @@
 /**
- * แคตตาล็อกกิจกรรมทั้ง 26 รายการ ตามเอกสารแนบ ค
+ * แคตตาล็อกกิจกรรมทั้ง 28 รายการ ตามเอกสารแนบ ค
  *
  * เก็บเป็น data ไม่ใช่หน้าจอละไฟล์ เพราะทุกกิจกรรมมีรูปแบบเดียวกันคือ
  * "ใครทำ เมื่อไหร่ กรอกอะไร แล้วระบบเอาไปคำนวณอะไรต่อ"
@@ -15,6 +15,7 @@ export type FieldType =
   | 'datetime'
   | 'select'
   | 'bool'
+  | 'checklist'
   | 'photo'
   | 'animal'
   | 'semen'
@@ -97,15 +98,8 @@ export const ACTIVITIES: ActivitySpec[] = [
       'บันทึกรายละเอียดการคลอด สร้างทะเบียนลูกโค และปิดรอบการผสมเดิม รกค้างและระดับความยากในการคลอดใช้ทำนายปัญหามดลูกอักเสบในรอบถัดไป',
     needsAnimal: true,
     fields: [
-      { key: 'calvedAt', label: 'วันที่คลอด', type: 'datetime', required: true },
-      {
-        key: 'difficulty',
-        label: 'ระดับความยากในการคลอด',
-        type: 'select',
-        required: true,
-        options: ['คลอดเอง', 'ช่วยเล็กน้อย', 'ช่วยมาก', 'ผ่าคลอด'],
-      },
-      { key: 'retainedPlacenta', label: 'มีรกค้าง', type: 'bool' },
+      { key: 'calvedAt', label: 'วันและเวลาที่คลอด', type: 'datetime', required: true },
+      { key: 'calfSex', label: 'เพศลูกโค', type: 'select', options: ['เมีย', 'ผู้'] },
       { key: 'calfWeightKg', label: 'น้ำหนักแรกเกิด', type: 'number', unit: 'กก.', min: 5, max: 80 },
       {
         key: 'calfCondition',
@@ -113,8 +107,20 @@ export const ACTIVITIES: ActivitySpec[] = [
         type: 'select',
         options: ['แข็งแรง', 'อ่อนแอ', 'ตายแรกคลอด'],
       },
-      { key: 'calfSex', label: 'เพศลูกโค', type: 'select', options: ['เมีย', 'ผู้'] },
       { key: 'calfRfid', label: 'หมายเลข RFID ที่ติดให้ลูกโค', type: 'text' },
+      {
+        key: 'difficulty',
+        label: 'วิธีการคลอด',
+        type: 'select',
+        required: true,
+        options: ['คลอดปกติ', 'คลอดยาก'],
+      },
+      {
+        key: 'birthStatus',
+        label: 'สถานะการคลอดอื่น ๆ',
+        type: 'checklist',
+        options: ['รกค้าง', 'มดลูกทะลัก'],
+      },
       WHO,
       PHOTO,
     ],
@@ -167,7 +173,7 @@ export const ACTIVITIES: ActivitySpec[] = [
   },
   {
     code: 'ก-04',
-    name: 'ตรวจอวัยวะสืบพันธุ์หลังคลอด',
+    name: 'ตรวจระบบสืบพันธุ์',
     group: 'field',
     actors: ['husbandry'],
     trigger: 'ครบประมาณ 30 วันหลังคลอด ตามกำหนดการที่ระบบสร้าง',
@@ -273,21 +279,26 @@ export const ACTIVITIES: ActivitySpec[] = [
       'เวลาที่พบอาการคือจุดตั้งต้นของการคำนวณช่วงผสมที่เหมาะสม (Golden Period) จึงต้องบันทึกเวลาให้ละเอียดที่สุด',
     needsAnimal: true,
     fields: [
+      {
+        key: 'purpose',
+        label: 'ประเภทการบันทึก',
+        type: 'select',
+        options: ['เฝ้าระวังการจับสัด', 'เฝ้าระวังการกลับสัด (กรณีผสมไม่ติด)', 'แจ้งโคเป็นสัด'],
+      },
       { key: 'observedAt', label: 'วันและเวลาที่พบอาการ', type: 'datetime', required: true },
       {
         key: 'method',
         label: 'วิธีที่ตรวจพบ',
         type: 'select',
         required: true,
-        options: ['สังเกตด้วยตา', 'ชอล์กหาง', 'เครื่องวัดการเคลื่อนไหว', 'โคตัวผู้ตรวจสัด'],
+        options: ['สังเกตด้วยตา (ดูการขี่กัน)', 'ชอล์กหาง', 'เครื่องวัดการเคลื่อนไหว', 'โคตัวผู้ตรวจสัด'],
       },
       {
         key: 'signs',
         label: 'อาการที่สังเกตได้',
-        type: 'select',
+        type: 'checklist',
         options: ['ยืนนิ่งให้ขึ้นทับ', 'ขึ้นทับตัวอื่น', 'เมือกใส', 'บวมแดง', 'กระวนกระวาย'],
       },
-      { key: 'intensity', label: 'ความชัดของอาการ', type: 'select', required: true, options: ['ชัดเจน', 'ปานกลาง', 'สงสัย'] },
       { key: 'reporterType', label: 'ประเภทของผู้พบ', type: 'select', options: ['สัตวบาล', 'เกษตรกร'] },
       // ขั้นยืนยันตามมติ [22:41] — คำแจ้งของเกษตรกรต้องผ่านสัตวบาลก่อนจึงจะเกิดงานผสม
       {
@@ -345,7 +356,7 @@ export const ACTIVITIES: ActivitySpec[] = [
   },
   {
     code: 'ก-09',
-    name: 'ตรวจครรภ์',
+    name: 'ตรวจท้อง',
     group: 'field',
     actors: ['husbandry'],
     trigger: 'ครบกำหนดตามวิธีตรวจที่เลือก นับจากวันผสม',
@@ -416,6 +427,44 @@ export const ACTIVITIES: ActivitySpec[] = [
       { key: 'obstacle', label: 'ปัญหาหรืออุปสรรคที่พบ', type: 'textarea' },
     ],
     derived: ['สถานะความพร้อมของโคก่อนสัตวบาลเข้าพื้นที่', 'อัตราการตอบสนองต่อการแจ้งเตือนรายฟาร์ม'],
+  },
+  {
+    code: 'ก-12',
+    name: 'ป้อนนมน้ำเหลืองลูกโค',
+    group: 'field',
+    actors: ['farmer', 'husbandry'],
+    trigger: 'แจ้งเตือนทันทีที่บันทึกการคลอด ต้องป้อนภายใน 12 ชั่วโมงหลังคลอด',
+    detail: 'ลูกโคต้องได้รับนมน้ำเหลืองภายใน 12 ชั่วโมงแรก เพื่อรับภูมิคุ้มกันจากแม่ ยิ่งช้าลูกโคยิ่งดูดซึมภูมิคุ้มกันได้น้อยลง',
+    needsAnimal: true,
+    fields: [
+      { key: 'fedAt', label: 'วันและเวลาที่ป้อนนมน้ำเหลือง', type: 'datetime', required: true },
+      { key: 'amountL', label: 'ปริมาณที่ป้อน', type: 'number', unit: 'ลิตร', min: 0, max: 10, step: 0.1 },
+      { key: 'method', label: 'วิธีป้อน', type: 'select', options: ['ลูกโคดูดเอง', 'ป้อนขวด', 'ป้อนท่อ'] },
+      { key: 'reporter', label: 'ผู้ป้อน', type: 'text', required: true },
+    ],
+    derived: ['บันทึกว่าลูกโคได้รับนมน้ำเหลืองทันเวลา', 'อัตราการป้อนทันใน 12 ชั่วโมงรายฟาร์ม'],
+  },
+  {
+    code: 'ก-13',
+    name: 'ดูแลลูกโคหลังคลอด 2 สัปดาห์',
+    group: 'field',
+    actors: ['husbandry'],
+    trigger: 'ครบ 2 สัปดาห์หลังคลอด ตามกำหนดการที่ระบบสร้าง',
+    detail: 'ทำลายเขาลูกโคและติดเบอร์หู RFID ให้ลูกโค เพื่อขึ้นทะเบียนตัวสัตว์',
+    needsAnimal: true,
+    fields: [
+      { key: 'doneAt', label: 'วันที่ดำเนินการ', type: 'date', required: true },
+      {
+        key: 'tasksDone',
+        label: 'สิ่งที่ดำเนินการแล้ว',
+        type: 'checklist',
+        required: true,
+        options: ['ทำลายเขาลูกโค', 'ติดเบอร์หู RFID'],
+      },
+      { key: 'calfRfid', label: 'หมายเลข RFID ที่ติดให้ลูกโค', type: 'text' },
+      WHO,
+    ],
+    derived: ['ทะเบียนลูกโคที่ติดเบอร์หูแล้ว', 'รายการลูกโคที่ยังไม่ได้ทำลายเขา'],
   },
 
   // ── ข · คลังและทรัพย์สิน ──────────────────────────────────────────────
@@ -680,9 +729,9 @@ export const ACTIVITIES: ActivitySpec[] = [
 export const ACTIVITY_BY_CODE = new Map(ACTIVITIES.map((a) => [a.code, a]))
 
 /**
- * ขอบเขตของเฟสนี้ — ทำเฉพาะ **ภาค ก · งานภาคสนามรายตัว** (ก-01 ถึง ก-11)
+ * ขอบเขตของเฟสนี้ — ทำเฉพาะ **ภาค ก · งานภาคสนามรายตัว** (ก-01 ถึง ก-13)
  *
- * แคตตาล็อกยังเก็บครบทั้ง 26 รายการไว้เป็นเอกสารอ้างอิงของโครงการ
+ * แคตตาล็อกยังเก็บครบทั้ง 28 รายการไว้เป็นเอกสารอ้างอิงของโครงการ
  * แต่หน้าจอที่ผู้ใช้กรอกได้จริงตัดเหลือภาค ก อย่างเดียว
  * เปิดภาคอื่นเมื่อถึงเฟสถัดไปได้ด้วยการเพิ่มกลุ่มลงในค่านี้ที่เดียว
  */

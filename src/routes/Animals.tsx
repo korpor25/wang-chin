@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { ScanLine } from 'lucide-react'
 import { Card, Chips, Empty, Note, Pill, SearchBox } from '../components/ui'
-import { CYCLE_LABEL, type Animal, type BioParams, type CycleStage, type Farm, type Role } from '../domain/types'
+import { CYCLE_LABEL, parityLabel, type Animal, type BioParams, type CycleStage, type Farm, type Role } from '../domain/types'
 import { getParams, searchAnimals } from '../data/queries'
 import { ACTIVITY_BY_CODE } from '../domain/activities'
 import { useAccount } from '../state/session'
@@ -57,7 +57,7 @@ function nextStep(a: Animal, p: BioParams | null): NextStep {
         line: a.lastCalvingAt
           ? `หลังคลอด ${days(a.lastCalvingAt)} วัน · ตรวจมดลูก ${due ? dayShort(due) : '—'}`
           : 'อยู่ในระยะพักหลังคลอด',
-        action: 'ตรวจอวัยวะสืบพันธุ์',
+        action: 'ตรวจระบบสืบพันธุ์',
         code: 'ก-04',
         to: form('ก-04', a.id),
         tone: 'warn',
@@ -66,15 +66,14 @@ function nextStep(a: Animal, p: BioParams | null): NextStep {
     case 'bred': {
       const due = a.lastBredAt ? addDays(a.lastBredAt, p?.pregnancyCheckDays ?? 35) : null
       return {
-        line: due ? `ผสมแล้ว · ตรวจครรภ์ ${dayShort(due)}` : 'ผสมแล้ว รอตรวจครรภ์',
-        action: 'บันทึกผลตรวจครรภ์',
+        line: due ? `ผสมแล้ว · ตรวจท้อง ${dayShort(due)}` : 'ผสมแล้ว รอตรวจท้อง',
+        action: 'บันทึกผลตรวจท้อง',
         code: 'ก-09',
         to: form('ก-09', a.id),
         tone: 'info',
       }
     }
     case 'pregnant':
-    case 'dry':
       return {
         line: a.expectedCalvingAt
           ? `ตั้งท้อง · คลอดคาดการณ์ ${dayShort(a.expectedCalvingAt)}`
@@ -119,7 +118,6 @@ const STAGE_OPTIONS: Array<{ value: StageFilter; label: string }> = [
   { value: 'bred', label: CYCLE_LABEL.bred },
   { value: 'pregnant', label: CYCLE_LABEL.pregnant },
   { value: 'fresh', label: CYCLE_LABEL.fresh },
-  { value: 'dry', label: CYCLE_LABEL.dry },
   { value: 'heifer', label: CYCLE_LABEL.heifer },
   { value: 'problem', label: CYCLE_LABEL.problem },
 ]
@@ -130,7 +128,6 @@ const STAGE_TONE: Record<CycleStage, 'ok' | 'warn' | 'crit' | 'mute'> = {
   waiting: 'warn',
   bred: 'mute',
   pregnant: 'ok',
-  dry: 'ok',
   problem: 'crit',
   culled: 'mute',
 }
@@ -215,7 +212,7 @@ export function Animals() {
                 </div>
 
                 <div className="beast-name">
-                  {a.breed} {a.bloodPct}% · {animalAge(a.birthDate)} · ท้องที่ {a.parity} ·{' '}
+                  {a.breed} {a.bloodPct}% · {animalAge(a.birthDate)} · {parityLabel(a.parity)} ·{' '}
                   {farmName.get(a.farmId) ?? a.farmId}
                 </div>
 

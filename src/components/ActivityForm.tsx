@@ -79,6 +79,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
       if (f.type === 'date') init[f.key] = localNow(false)
       if (f.type === 'datetime') init[f.key] = localNow(true)
       if (f.type === 'bool') init[f.key] = false
+      if (f.type === 'checklist') init[f.key] = []
       if (f.default !== undefined) init[f.key] = f.default
       if (f.key === 'actor' || f.key === 'reporter') init[f.key] = name
     }
@@ -159,7 +160,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
       if (!f.required || f.hidden) continue
       const v = values[f.key]
       if (f.type === 'bool') continue
-      if (v === undefined || v === null || v === '') next[f.key] = 'จำเป็นต้องกรอก'
+      if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) next[f.key] = 'จำเป็นต้องกรอก'
     }
     setErrors(next)
     return Object.keys(next).length === 0
@@ -564,6 +565,25 @@ function FieldInput({
           </div>
         )}
 
+        {error && <ErrorText msg={error} />}
+      </Field>
+    )
+  }
+
+  if (f.type === 'checklist') {
+    const picked = Array.isArray(value) ? (value as string[]) : []
+    return (
+      <Field label={label} hint={hint}>
+        {(f.options ?? []).map((o) => (
+          <label key={o} className="field check">
+            <input
+              type="checkbox"
+              checked={picked.includes(o)}
+              onChange={(e) => onChange(e.target.checked ? [...picked, o] : picked.filter((x) => x !== o))}
+            />
+            <span>{o}</span>
+          </label>
+        ))}
         {error && <ErrorText msg={error} />}
       </Field>
     )

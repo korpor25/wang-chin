@@ -5,7 +5,7 @@ import { ActRow, Card, Chips, Empty, KeyValues, List, Note, PageHeader, Pill, Ro
 import { ACTIVITY_BY_CODE, activitiesForRole } from '../domain/activities'
 import { activityIcon } from '../components/activityIcon'
 import { CowModel } from '../components/CowModel'
-import { CYCLE_LABEL, type ActivityRecord, type Animal, type Farm, type Task } from '../domain/types'
+import { CYCLE_LABEL, parityLabel, type ActivityRecord, type Animal, type Farm, type Task } from '../domain/types'
 import { animalTimeline, getParams } from '../data/queries'
 import { breedingBlockers, goldenPeriod, nextHeatWindow } from '../domain/rules'
 import { BAND_TONE, bcsBand } from '../domain/bcs'
@@ -99,7 +99,7 @@ export function AnimalDetail() {
                 ['สายพันธุ์', `${animal.breed} ${animal.bloodPct}%`],
                 ['พ่อพันธุ์', animal.sireCode ?? '—'],
                 ['อายุ', animalAge(animal.birthDate)],
-                ['ท้องที่', String(animal.parity)],
+                ['สถานะการท้อง', parityLabel(animal.parity)],
                 ['ฟาร์ม', farm ? `${farm.code} · ${farm.owner}` : animal.farmId],
                 ['ตำบล/อำเภอ', farm ? `${farm.subdistrict} / ${farm.district}` : '—'],
                 ['BCS ล่าสุด', animal.lastBcs !== null ? `${animal.lastBcs} / ${params.bcsScaleMax}` : 'ยังไม่เคยประเมิน'],

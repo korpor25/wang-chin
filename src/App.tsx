@@ -19,7 +19,7 @@ import { Assign } from './routes/Assign'
 import { Login } from './routes/Login'
 import { NotFound } from './routes/NotFound'
 
-import { seedIfEmpty } from './data/seed'
+import { renameLegacyLabels, seedIfEmpty } from './data/seed'
 import { getParams } from './data/queries'
 import { runEscalation } from './data/tasks'
 import { requestPersist } from './lib/storage'
@@ -71,7 +71,9 @@ export default function App() {
 
   useEffect(() => {
     restore()
-    void seedIfEmpty().finally(() => setDataReady(true))
+    void seedIfEmpty()
+      .then(() => renameLegacyLabels())
+      .finally(() => setDataReady(true))
     // OFF-08 — ขอสิทธิ์เก็บข้อมูลถาวรตั้งแต่เปิดแอป ไม่งั้นงานภาคสนามยังอยู่ในสถานะ
     // best-effort ที่ระบบลบทิ้งได้เองเมื่อพื้นที่ใกล้เต็ม
     void requestPersist().catch(() => undefined)

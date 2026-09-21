@@ -148,8 +148,43 @@ export async function applyEffects(
       })
       await addTasks(tasksAfterCalving(calvedAt, params))
       out.messages.push('ปิดรอบผสมเดิม และเปิดรอบใหม่ให้แล้ว')
-      if (payload.retainedPlacenta === true)
+      // นมน้ำเหลืองมีเวลาแค่ 12 ชม. — ต้องเด้งถึงเกษตรกรทันที ไม่รอรอบแจ้งเตือนล่วงหน้า
+      await notify({
+        title: 'ป้อนนมน้ำเหลืองลูกโค ภายใน 12 ชม.',
+        body: `${animal ? `${animal.tagNo} · ` : ''}คลอดเมื่อ ${new Date(calvedAt).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} น. — ต้องป้อนภายใน 12 ชั่วโมงหลังคลอด`,
+        toRole: 'farmer',
+        level: 'warn',
+        animalId,
+        farmId: animal?.farmId ?? null,
+      })
+      await notify({
+        title: 'ติดตามการป้อนนมน้ำเหลืองลูกโค ภายใน 12 ชม.',
+        body: `${animal ? `${animal.tagNo} · ` : ''}แจ้งเกษตรกรให้ป้อนแล้ว — ครบกำหนด ${new Date(calvedAt + 12 * 3_600_000).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} น.`,
+        toRole: 'husbandry',
+        level: 'warn',
+        animalId,
+        farmId: animal?.farmId ?? null,
+      })
+      out.messages.push('ส่งแจ้งเตือนให้เกษตรกรและสัตวบาลเรื่องป้อนนมน้ำเหลืองลูกโคภายใน 12 ชม. และตั้งงานทำลายเขา/ติดเบอร์หู RFID เมื่อครบ 2 สัปดาห์')
+      const birthStatus = Array.isArray(payload.birthStatus) ? payload.birthStatus : []
+      if (birthStatus.includes('รกค้าง'))
         out.messages.push('พบรกค้าง — ระบบทำเครื่องหมายเฝ้าระวังมดลูกอักเสบไว้')
+      break
+    }
+
+    // ── นมน้ำเหลืองลูกโค ──
+    case 'ก-12': {
+      const fedAt = ts(payload.fedAt, occurredAt)
+      const late = animal?.lastCalvingAt ? fedAt > animal.lastCalvingAt + 12 * 3_600_000 : false
+      await notify({
+        title: late ? 'ป้อนนมน้ำเหลืองลูกโคช้ากว่า 12 ชม.' : 'ป้อนนมน้ำเหลืองลูกโคแล้ว',
+        body: `${animal ? `${animal.tagNo} · ` : ''}ป้อนเมื่อ ${new Date(fedAt).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} น. · บันทึกโดย ${actor.name}`,
+        toRole: 'husbandry',
+        level: late ? 'warn' : 'info',
+        animalId,
+        farmId: animal?.farmId ?? null,
+      })
+      out.messages.push('แจ้งสัตวบาลแล้วว่าป้อนนมน้ำเหลืองลูกโค' + (late ? ' (เกิน 12 ชม.หลังคลอด)' : ''))
       break
     }
 
@@ -236,11 +271,11 @@ export async function applyEffects(
           }
         }
       }
-      out.messages.push(`นัดตรวจครรภ์ในอีก ${params.pregnancyCheckDays} วัน`)
+      out.messages.push(`นัดตรวจท้องในอีก ${params.pregnancyCheckDays} วัน`)
       break
     }
 
-    // ── ตรวจครรภ์ ──
+    // ── ตรวจท้อง ──
     case 'ก-09': {
       const result = String(payload.result ?? '')
       if (result === 'ตั้งท้อง') {
@@ -262,7 +297,7 @@ export async function applyEffects(
             toleranceDays: 3,
             assignedRole: 'husbandry',
             priority: 'normal',
-            derivedFrom: 'ผลตรวจครรภ์ไม่ติด',
+            derivedFrom: 'ผลตรวจท้องไม่ติด',
           },
         ])
       }

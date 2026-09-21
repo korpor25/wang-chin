@@ -32,7 +32,6 @@ const PARAM_ORDER: Array<keyof BioParams> = [
   'goldenPeriodToHours',
   'pregnancyCheckDays',
   'gestationDays',
-  'dryOffBeforeCalvingDays',
   'bcsScaleMax',
   'bcsMinBeforeBreeding',
   'alertLeadDays',

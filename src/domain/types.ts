@@ -56,9 +56,8 @@ export type CycleStage =
   | 'heifer' // โคสาว ยังไม่เคยให้ลูก
   | 'fresh' // หลังคลอด อยู่ในระยะพัก
   | 'waiting' // พร้อมเข้าโปรแกรมผสม
-  | 'bred' // ผสมแล้ว รอตรวจครรภ์
+  | 'bred' // ผสมแล้ว รอตรวจท้อง
   | 'pregnant' // ยืนยันตั้งท้อง
-  | 'dry' // พักก่อนคลอด
   | 'problem' // มีปัญหา ต้องฟื้นฟูก่อน
   | 'culled' // คัดออก
 
@@ -68,9 +67,15 @@ export const CYCLE_LABEL: Record<CycleStage, string> = {
   waiting: 'พร้อมผสม',
   bred: 'ผสมแล้ว รอตรวจ',
   pregnant: 'ตั้งท้อง',
-  dry: 'พักก่อนคลอด',
   problem: 'ต้องฟื้นฟู',
   culled: 'คัดออก',
+}
+
+/** สถานะการท้องของโคตามจำนวนครั้ง — 0 = ไม่เคยท้อง (โคสาว), 1 = ท้องแรก, 2 ขึ้นไป = ท้อง 2, 3, ... */
+export function parityLabel(parity: number): string {
+  if (parity <= 0) return 'ไม่เคยท้อง'
+  if (parity === 1) return 'ท้องแรก'
+  return `ท้อง ${parity}`
 }
 
 export interface Animal {
@@ -285,7 +290,6 @@ export interface BioParams {
   goldenPeriodToHours: number
   pregnancyCheckDays: number
   gestationDays: number
-  dryOffBeforeCalvingDays: number
   bcsScaleMax: number
   bcsMinBeforeBreeding: number
   alertLeadDays: number

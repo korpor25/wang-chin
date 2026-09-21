@@ -65,6 +65,39 @@ export function seedIfEmpty(force = false): Promise<boolean> {
   return run
 }
 
+const LEGACY_LABELS: [string, string][] = [
+  ['ตรวจอวัยวะสืบพันธุ์หลังคลอด', 'ตรวจระบบสืบพันธุ์'],
+  ['ตรวจระบบสืบพันธุ์หลังคลอด', 'ตรวจระบบสืบพันธุ์'],
+  ['ตรวจอวัยวะสืบพันธุ์', 'ตรวจระบบสืบพันธุ์'],
+  ['ตรวจครรภ์', 'ตรวจท้อง'],
+]
+
+/**
+ * เปลี่ยนคำเรียกในงานและแจ้งเตือนที่ค้างอยู่ในเครื่องจากชุดข้อมูลเก่า
+ *
+ * ชื่องานถูกคัดลอกลงฐานตอนสร้าง แก้ที่ต้นทางอย่างเดียวจึงไม่ทำให้ของเดิมเปลี่ยนตาม
+ * ทำซ้ำได้ไม่มีผลเสีย เพราะแถวที่เปลี่ยนแล้วจะไม่มีคำเก่าเหลือให้แทนอีก
+ */
+export async function renameLegacyLabels() {
+  const fix = (s: string) => LEGACY_LABELS.reduce((acc, [from, to]) => acc.split(from).join(to), s)
+  await db.transaction('rw', db.tasks, db.alerts, db.animals, async () => {
+    // สถานะ "พักก่อนคลอด" ถูกเอาออกแล้ว โคเดิมที่อยู่สถานะนี้คือโคตั้งท้องอยู่ดี
+    await db.animals
+      .filter((a) => (a.stage as string) === 'dry')
+      .modify((a) => {
+        a.stage = 'pregnant'
+      })
+    await db.tasks.toCollection().modify((k) => {
+      k.title = fix(k.title)
+      k.derivedFrom = fix(k.derivedFrom)
+    })
+    await db.alerts.toCollection().modify((a) => {
+      a.title = fix(a.title)
+      a.body = fix(a.body)
+    })
+  })
+}
+
 async function seed(force = false) {
   const count = await db.farms.count()
   if (count > 0 && !force) return false
@@ -110,8 +143,8 @@ async function seed(force = false) {
   ]
 
   // ── โค 500 ตัว กระจายตามระยะของวงจร ──
-  const stages: Animal['stage'][] = ['heifer', 'fresh', 'waiting', 'bred', 'pregnant', 'dry', 'problem']
-  const stageWeight = [60, 70, 90, 80, 150, 40, 10] // รวม 500
+  const stages: Animal['stage'][] = ['heifer', 'fresh', 'waiting', 'bred', 'pregnant', 'problem']
+  const stageWeight = [60, 70, 90, 80, 190, 10] // รวม 500
   const animals: Animal[] = []
   let idx = 0
   stages.forEach((stage, si) => {
@@ -122,7 +155,7 @@ async function seed(force = false) {
       const lastCalving =
         stage === 'heifer' ? null : t - (10 + ((i * 7) % 200)) * DAY
       const lastBred =
-        stage === 'bred' || stage === 'pregnant' || stage === 'dry'
+        stage === 'bred' || stage === 'pregnant'
           ? t - (20 + ((i * 5) % 240)) * DAY
           : null
       animals.push({
@@ -144,7 +177,7 @@ async function seed(force = false) {
           stage === 'waiting' ? t - ((i % 20) + 1) * DAY * 0.5 : null,
         lastBredAt: lastBred,
         expectedCalvingAt:
-          stage === 'pregnant' || stage === 'dry'
+          stage === 'pregnant'
             ? (lastBred ?? t) + DEFAULT_PARAMS.gestationDays * DAY
             : null,
         lastBcs: stage === 'problem' ? 3 + (i % 2) : 4 + (i % 4),
@@ -201,7 +234,7 @@ async function seed(force = false) {
     { id: 'fg_1', name: 'กลุ่มหลังคลอด', formula: 'สูตร A โปรตีน 16%', kgPerHeadPerDay: 6, supplements: 'แร่ธาตุก้อน + วิตามิน ADE', startedAt: t - 120 * DAY },
     { id: 'fg_2', name: 'กลุ่มรอผสม', formula: 'สูตร B โปรตีน 14%', kgPerHeadPerDay: 5, supplements: 'แร่ธาตุก้อน', startedAt: t - 120 * DAY },
     { id: 'fg_3', name: 'กลุ่มตั้งท้อง', formula: 'สูตร C โปรตีน 13%', kgPerHeadPerDay: 5.5, supplements: 'แร่ธาตุก้อน + ซีลีเนียม', startedAt: t - 90 * DAY },
-    { id: 'fg_4', name: 'กลุ่มพักก่อนคลอด', formula: 'สูตร D โปรตีน 12%', kgPerHeadPerDay: 4.5, supplements: 'แคลเซียมต่ำ', startedAt: t - 60 * DAY },
+    { id: 'fg_4', name: 'กลุ่มแม่โคใกล้คลอด', formula: 'สูตร D โปรตีน 12%', kgPerHeadPerDay: 4.5, supplements: 'แคลเซียมต่ำ', startedAt: t - 60 * DAY },
   ]
 
   // ── งานที่ระบบสร้างจากเหตุการณ์จริงของโคแต่ละตัว (ค-01) ──
@@ -236,6 +269,16 @@ async function seed(force = false) {
       })
     }
   }
+  // โคที่เพิ่งคลอด 6 ตัว ให้เห็นงานลูกโคครบทุกสถานะ — ป้อนนมน้ำเหลืองทัน/ใกล้ครบ 12 ชม./เลยกำหนด
+  // และทำลายเขา + ติดเบอร์หู RFID ที่ใกล้ครบ 2 สัปดาห์/เลยกำหนด (ชั่วโมงที่ผ่านมาหลังคลอด)
+  const CALF_SAMPLE_HOURS_AGO = [4, 10, 30, 12 * 24, 13 * 24, 15 * 24]
+  animals
+    .filter((a) => a.stage === 'fresh')
+    .slice(0, CALF_SAMPLE_HOURS_AGO.length)
+    .forEach((a, i) => {
+      a.lastCalvingAt = t - CALF_SAMPLE_HOURS_AGO[i] * 3_600_000
+    })
+
   for (const a of animals) {
     if (a.lastCalvingAt) pushTasks(a, tasksAfterCalving(a.lastCalvingAt, DEFAULT_PARAMS))
     if (a.lastBredAt) pushTasks(a, tasksAfterInsemination(a.lastBredAt, DEFAULT_PARAMS))
@@ -244,6 +287,8 @@ async function seed(force = false) {
   // ── แจ้งเตือน (ค-03) จากงานที่ใกล้ถึงกำหนดและที่เลยกำหนด ──
   const alerts: Alert[] = tasks
     .filter((k) => k.dueAt < t + DEFAULT_PARAMS.alertLeadDays * DAY)
+    // งานลูกโค (ก-12, ก-13) ขึ้นก่อน ไม่งั้นโดนตัดท้ายรายการที่จำกัดไว้ 40 รายการ
+    .sort((x, y) => Number(/^ก-1[23]$/.test(y.activityCode)) - Number(/^ก-1[23]$/.test(x.activityCode)))
     .slice(0, 40)
     .map((k, i) => ({
       localId: newLocalId('alert'),

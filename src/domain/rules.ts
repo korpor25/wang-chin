@@ -16,7 +16,6 @@ export const DEFAULT_PARAMS: BioParams = {
   goldenPeriodToHours: 16,
   pregnancyCheckDays: 35,
   gestationDays: 283,
-  dryOffBeforeCalvingDays: 60,
   bcsScaleMax: 9,
   bcsMinBeforeBreeding: 5,
   alertLeadDays: 2,
@@ -33,9 +32,8 @@ export const PARAM_LABEL: Record<keyof BioParams, string> = {
   estrusWindowHours: 'ระยะเวลาที่แสดงอาการเป็นสัด',
   goldenPeriodFromHours: 'เริ่มช่วงผสมที่เหมาะสม (หลังเริ่มเป็นสัด)',
   goldenPeriodToHours: 'สิ้นสุดช่วงผสมที่เหมาะสม',
-  pregnancyCheckDays: 'ตรวจครรภ์หลังผสม',
+  pregnancyCheckDays: 'ตรวจท้องหลังผสม',
   gestationDays: 'ระยะตั้งท้อง',
-  dryOffBeforeCalvingDays: 'เริ่มพักก่อนคลอด',
   bcsScaleMax: 'ค่าสูงสุดของสเกล BCS',
   bcsMinBeforeBreeding: 'BCS ต่ำสุดที่ยอมให้เข้าผสม',
   alertLeadDays: 'แจ้งเตือนล่วงหน้า',
@@ -54,7 +52,6 @@ export const PARAM_UNIT: Record<keyof BioParams, string> = {
   goldenPeriodToHours: 'ชั่วโมง',
   pregnancyCheckDays: 'วัน',
   gestationDays: 'วัน',
-  dryOffBeforeCalvingDays: 'วัน',
   bcsScaleMax: 'คะแนน',
   bcsMinBeforeBreeding: 'คะแนน',
   alertLeadDays: 'วัน',
@@ -96,8 +93,26 @@ export function tasksAfterCalving(calvedAt: number, p: BioParams): DerivedTask[]
       derivedFrom: 'คลอด (จุดบันทึกบังคับ)',
     },
     {
+      activityCode: 'ก-12',
+      title: 'ป้อนนมน้ำเหลืองลูกโค ภายใน 12 ชม.',
+      dueAt: addHours(calvedAt, 12),
+      toleranceDays: 0,
+      assignedRole: 'farmer',
+      priority: 'high',
+      derivedFrom: 'คลอด + 12 ชม.',
+    },
+    {
+      activityCode: 'ก-13',
+      title: 'ทำลายเขาและติดเบอร์หู RFID ลูกโค',
+      dueAt: addDays(calvedAt, 14),
+      toleranceDays: 3,
+      assignedRole: 'husbandry',
+      priority: 'normal',
+      derivedFrom: d(14),
+    },
+    {
       activityCode: 'ก-04',
-      title: 'ตรวจอวัยวะสืบพันธุ์หลังคลอด',
+      title: 'ตรวจระบบสืบพันธุ์',
       dueAt: addDays(calvedAt, p.uterusCheckDays),
       toleranceDays: 5,
       assignedRole: 'husbandry',
@@ -125,7 +140,7 @@ export function tasksAfterCalving(calvedAt: number, p: BioParams): DerivedTask[]
   ]
 }
 
-/** เหตุการณ์ผสม → กำหนดตรวจครรภ์ และวันคาดว่าจะกลับเป็นสัดถ้าไม่ติด */
+/** เหตุการณ์ผสม → กำหนดตรวจท้อง และวันคาดว่าจะกลับเป็นสัดถ้าไม่ติด */
 export function tasksAfterInsemination(bredAt: number, p: BioParams): DerivedTask[] {
   return [
     {
@@ -139,7 +154,7 @@ export function tasksAfterInsemination(bredAt: number, p: BioParams): DerivedTas
     },
     {
       activityCode: 'ก-09',
-      title: 'ตรวจครรภ์',
+      title: 'ตรวจท้อง',
       dueAt: addDays(bredAt, p.pregnancyCheckDays),
       toleranceDays: 5,
       assignedRole: 'husbandry',
@@ -149,7 +164,7 @@ export function tasksAfterInsemination(bredAt: number, p: BioParams): DerivedTas
   ]
 }
 
-/** ยืนยันตั้งท้อง → กำหนดพักก่อนคลอด เตรียมคอก และวันคลอดคาดการณ์ */
+/** ยืนยันตั้งท้อง → กำหนดเตรียมคอก และวันคลอดคาดการณ์ */
 export function tasksAfterPregnancy(bredAt: number, p: BioParams): DerivedTask[] {
   const calving = addDays(bredAt, p.gestationDays)
   return [

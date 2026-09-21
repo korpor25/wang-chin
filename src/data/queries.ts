@@ -109,7 +109,7 @@ export async function heatWatch(p: BioParams, farmIds?: string[]): Promise<{
 export async function computeKpis(): Promise<Kpi[]> {
   const animals = await db.animals.filter((a) => a.active).toArray()
   const breedable = animals.filter((a) => a.sex === 'female' && a.stage !== 'heifer' && a.stage !== 'culled')
-  const pregnant = animals.filter((a) => a.stage === 'pregnant' || a.stage === 'dry')
+  const pregnant = animals.filter((a) => a.stage === 'pregnant')
   const bred = animals.filter((a) => a.stage === 'bred')
 
   const inseminations = await db.records.where('activityCode').equals('ก-08').count()
@@ -175,7 +175,7 @@ export async function computeKpis(): Promise<Kpi[]> {
       hint: `จากแม่โคที่ผสมได้ ${breedable.length} ตัว`,
     },
     {
-      label: 'รอตรวจครรภ์',
+      label: 'รอตรวจท้อง',
       value: bred.length,
       unit: 'ตัว',
       target: null,
