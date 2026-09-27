@@ -58,7 +58,7 @@ export function Tasks() {
   return (
     <>
       <p className="daystamp">ประจำวัน{today}</p>
-      <Card title="งานของฉัน" hint="ระบบสร้างจากเหตุการณ์และค่าพารามิเตอร์ชีววิทยา">
+      <Card title="งานของฉัน">
         <Stats>
           <Stat label="เลยกำหนด" value={num(data.overdue.length)} sub="รายการ" />
           <Stat label="วันนี้" value={num(data.today.length)} sub="รายการ" />

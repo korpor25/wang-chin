@@ -5,6 +5,7 @@ import {
   Beef,
   Bell,
   CircleAlert,
+  CircleCheck,
   ClipboardList,
   ClipboardPlus,
   Download,
@@ -20,7 +21,7 @@ import {
 import { db } from '../data/db'
 import { useSession } from '../state/session'
 import { ROLE_LABEL, type Role } from '../domain/types'
-import { getRetention, runSync, syncSnapshot, type RetentionPolicy, type SyncSnapshot } from '../data/sync'
+import { getRetention, runSync, runSyncAll, syncSnapshot, type RetentionPolicy, type SyncSnapshot } from '../data/sync'
 import { age } from '../lib/format'
 import { Toasts, toast } from './Toast'
 
@@ -119,7 +120,7 @@ export function AppShell() {
   useEffect(() => {
     const onOnline = async () => {
       const s = await syncSnapshot()
-      if (s.pending === 0) return
+      if (s.outbox === 0) return
       const out = await runSync()
       if (out.succeeded > 0) toast.ok(`ส่งข้อมูลขึ้นระบบแล้ว ${out.succeeded} รายการ`)
       setSnap(await syncSnapshot())
@@ -129,8 +130,20 @@ export function AppShell() {
   }, [])
 
   async function sync() {
+    if (syncing) return
+    if (offline) {
+      toast.error('ยังไม่มีสัญญาณ ข้อมูลเก็บไว้ในเครื่องแล้ว จะส่งให้เองเมื่อกลับมาออนไลน์')
+      return
+    }
+    // อ่านคิวใหม่ตอนกด — ค่าที่แสดงอยู่อาจช้ากว่าคิวจริงได้ถึง 5 วินาที
+    const fresh = await syncSnapshot()
+    setSnap(fresh)
+    if (fresh.outbox === 0) {
+      toast.ok('ส่งข้อมูลครบแล้ว ไม่มีรายการค้าง')
+      return
+    }
     setSyncing(true)
-    const out = await runSync()
+    const out = await runSyncAll()
     setSnap(await syncSnapshot())
     setSyncing(false)
     if (out.succeeded > 0) toast.ok(`ส่งขึ้นระบบแล้ว ${out.succeeded} รายการ`)
@@ -145,7 +158,11 @@ export function AppShell() {
     if (outcome === 'accepted') toast.ok('ติดตั้งแอปแล้ว')
   }
 
-  const pending = (snap?.pending ?? 0) + (snap?.failed ?? 0) + (snap?.conflict ?? 0)
+  /**
+   * นับจากคิวส่งทั้งหมด (บันทึก งาน รูป โค ฟาร์ม) บวกรายการที่ขัดแย้ง
+   * เดิมนับแค่บันทึกกิจกรรม แถบเลยขึ้นว่าส่งครบแล้วทั้งที่ยังมีงานค้างในคิว และปุ่มส่งก็ไม่ยอมส่ง
+   */
+  const pending = (snap?.outbox ?? 0) + (snap?.conflict ?? 0)
   const offline = snap ? !snap.online : false
 
   /**
@@ -155,7 +172,7 @@ export function AppShell() {
   const overLimit = Boolean(
     policy &&
       snap &&
-      (snap.pending > policy.warnPendingOver ||
+      (snap.outbox > policy.warnPendingOver ||
         (snap.oldestPendingAt !== null &&
           Date.now() - snap.oldestPendingAt > policy.warnAgeHours * 3_600_000)),
   )
@@ -197,16 +214,28 @@ export function AppShell() {
       </nav>
 
       <main className="shell-body">
-        {snap && (offline || pending > 0) && (
-          <Link className={`statusbar ${overLimit ? 'alert' : offline ? 'offline' : 'online'}`} to="/sync">
-            {overLimit ? <TriangleAlert size={15} /> : offline ? <WifiOff size={15} /> : <RefreshCw size={15} />}
+        {/* แถบสถานะโชว์ทุกหน้าพร้อมปุ่มส่งข้อมูลตัวใหญ่ ผู้สูงอายุไม่ต้องไล่หาศูนย์ซิงค์ในเมนูเพิ่มเติม */}
+        {snap && (
+          <Link
+            className={`statusbar ${overLimit ? 'alert' : offline ? 'offline' : pending > 0 ? 'online' : 'synced'}`}
+            to="/sync"
+          >
+            {overLimit ? (
+              <TriangleAlert size={15} />
+            ) : offline ? (
+              <WifiOff size={15} />
+            ) : pending > 0 ? (
+              <RefreshCw size={15} />
+            ) : (
+              <CircleCheck size={15} />
+            )}
             <span>
-              {offline ? 'ออฟไลน์ — บันทึกลงเครื่องไว้ก่อน' : 'ออนไลน์'}
+              {offline ? 'ออฟไลน์ — บันทึกลงเครื่องไว้ก่อน' : pending > 0 ? 'ออนไลน์' : 'ข้อมูลขึ้นระบบครบแล้ว'}
               {pending > 0 && ` · ค้างส่ง ${pending} รายการ`}
-              {snap.oldestPendingAt && ` · เก่าสุด ${age(snap.oldestPendingAt)}`}
+              {pending > 0 && snap.oldestPendingAt && ` · เก่าสุด ${age(snap.oldestPendingAt)}`}
               {overLimit && ' · เกินเกณฑ์ที่ตั้งไว้'}
             </span>
-            {!offline && pending > 0 && (
+            {!offline && (
               <button
                 onClick={(e) => {
                   e.preventDefault()
@@ -214,7 +243,8 @@ export function AppShell() {
                 }}
                 disabled={syncing}
               >
-                {syncing ? 'กำลังส่ง…' : 'ส่งเลย'}
+                <RefreshCw size={15} className={syncing ? 'spin' : undefined} />
+                {syncing ? 'กำลังส่ง…' : 'ส่งข้อมูล'}
               </button>
             )}
           </Link>

@@ -68,7 +68,7 @@ export function Dashboard() {
     <>
       {/* ตัวเลขสรุป — เอาเฉพาะที่มาจากกิจกรรมภาค ก และกำหนดการที่ระบบสร้าง */}
       {herd && buckets && (
-        <Card title="ภาพรวมวันนี้" hint="ตัวเลขจากข้อมูลในเครื่อง อัปเดตทุกครั้งที่บันทึก">
+        <Card title="ภาพรวมวันนี้">
           <Stats quad>
             <Stat label="โคทั้งหมด" value={herd.total} sub="ตัว" />
             <Stat label="ใกล้คลอด" value={herd.nearCalving} sub="ตัว" tone="warn" />
@@ -87,7 +87,6 @@ export function Dashboard() {
       {steps.length > 0 && (
         <Card
           title="ขั้นตอนปฏิบัติการปศุสัตว์"
-          hint="ทางลัดที่ใช้บ่อย · ดูครบทุกกิจกรรมได้ที่แท็บบันทึก"
           action={
             <Link to="/record" className="link-more">
               ดูทั้งหมด

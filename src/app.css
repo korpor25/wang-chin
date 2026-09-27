@@ -223,8 +223,12 @@
   background: transparent;
   color: inherit;
   border-radius: var(--r-pill);
-  padding: 3px var(--sp-4);
-  font-size: var(--fs-xs);
+  min-height: 36px;
+  padding: 0 var(--sp-5);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
   font-weight: var(--fw-bold);
   cursor: pointer;
 }
@@ -521,27 +525,6 @@
 }
 
 /* ── ฟอร์มกิจกรรม ── */
-.form-head {
-  background: var(--brand-soft);
-  border-radius: var(--r-md);
-  padding: var(--sp-5) var(--sp-5);
-  margin-top: var(--sp-4);
-}
-
-.form-head h2 {
-  font-size: var(--fs-base);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
-}
-
-.form-head p {
-  font-size: var(--fs-sm);
-  color: var(--body);
-  margin-top: var(--sp-2);
-}
-
 .derived {
   list-style: none;
   margin: var(--sp-3) 0 0;
@@ -634,6 +617,12 @@ table.data tr:last-child td {
 table.data td.num {
   font-family: var(--mono);
   text-align: right;
+}
+
+/* ช่องข้อความยาว เช่น เหตุผลที่แถวนำเข้าไม่ผ่าน ให้ตัดบรรทัดแทนการล้นออกจอ */
+table.data td.wrap {
+  white-space: normal;
+  min-width: 220px;
 }
 
 /* ── สถานะว่าง ── */
@@ -1622,6 +1611,7 @@ table.data td.num {
 .bell {
   position: relative;
   flex: none;
+  margin-left: auto;
   margin-right: var(--sp-1);
   width: 36px;
   height: 36px;
@@ -1632,6 +1622,27 @@ table.data td.num {
   cursor: pointer;
   display: grid;
   place-items: center;
+}
+
+/* กระดิ่งดันตัวเองไปชิดขวาแล้ว ปุ่มบัญชีที่ตามมาจึงไม่ต้องดันซ้ำ */
+.bell + .avatar {
+  margin-left: 0;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
 }
 
 /* ป้ายจำนวนบนกระดิ่ง
@@ -2242,6 +2253,24 @@ table.data td.num {
 /* แถบสถานะกดได้ พาไปศูนย์ซิงค์ */
 a.statusbar {
   text-decoration: none;
+}
+
+/* ส่งครบแล้ว — ไม่มีอะไรต้องทำ จึงไม่ใส่กรอบสี ให้เป็นบรรทัดเงียบ ๆ แต่ปุ่มยังกดได้ขนาดเท่าเดิม */
+.statusbar.synced {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+.statusbar.synced svg:first-child {
+  color: var(--ok);
+}
+
+.statusbar.synced button {
+  border-color: var(--rule);
+  background: var(--card);
+  color: var(--brand);
 }
 
 /* หัวการ์ดแบบชิดซ้าย ใช้กับเมนูที่มีไอคอนนำหน้าชื่อ */

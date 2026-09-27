@@ -39,7 +39,7 @@ export function Inventory() {
 
   return (
     <>
-      <PageHeader title="คลังน้ำเชื้อ" sub="อ่านอย่างเดียว · ตัดสต๊อกอัตโนมัติเมื่อบันทึกการผสม" />
+      <PageHeader title="คลังน้ำเชื้อ" sub="อ่านอย่างเดียว" />
 
       <Card title="สรุปสต๊อกน้ำเชื้อ">
         <Stats>
@@ -52,13 +52,12 @@ export function Inventory() {
             รหัสสีตามจำนวนคงเหลือ — <b className="t-ok">เขียว</b> มากกว่า{' '}
             {params.semenWarnStraws} หลอด · <b className="t-warn">ส้ม</b> ตั้งแต่{' '}
             {params.semenWarnStraws} หลอดลงมา · <b className="t-crit">แดง</b> ตั้งแต่{' '}
-            {params.semenCritStraws} หลอดลงมา · ปรับเกณฑ์ได้ที่หน้าตั้งค่า
-            (ตัวเลขชุดนี้ยังรอที่ประชุมยืนยัน)
+            {params.semenCritStraws} หลอดลงมา
           </Note>
         )}
       </Card>
 
-      <Card title="รายการล็อต" hint={`${num(semen.length)} ล็อต · ข้อมูลมาจากการนำเข้า`}>
+      <Card title="รายการล็อต" hint={`${num(semen.length)} ล็อต`}>
         {semen.map((b) => {
           const left = b.strawsIn - b.strawsUsed
           const t = tone(b)
@@ -89,7 +88,7 @@ export function Inventory() {
                   </Link>
                 </div>
               ) : (
-                <Note>ล็อตนี้เลือกใช้ในการผสมไม่ได้ — ระบบซ่อนออกจากตัวเลือกให้อัตโนมัติ</Note>
+                <Note>ล็อตนี้ใช้ผสมไม่ได้</Note>
               )}
             </div>
           )

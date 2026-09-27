@@ -103,8 +103,7 @@ export function SyncCenter() {
 
         {!snap.online && (
           <Note>
-            <CloudOff size={14} className="ic-inline" /> ตอนนี้ออฟไลน์ — บันทึกต่อได้ตามปกติ
-            ระบบจะส่งให้เองเมื่อกลับมามีสัญญาณ
+            <CloudOff size={14} className="ic-inline" /> ออฟไลน์อยู่ — บันทึกต่อได้ตามปกติ
           </Note>
         )}
 
@@ -185,14 +184,10 @@ export function SyncCenter() {
               </li>
             ))}
           </List>
-          <Note>
-            นโยบายเริ่มต้นของระบบคือ last-write-wins แต่บันทึกสำคัญอย่างการผสมและผลตรวจท้อง
-            จะถูกกันไว้ให้คนตัดสินใจเสมอ พร้อมเก็บ audit log ของทุกการเลือก
-          </Note>
         </Card>
       )}
 
-      <Card title="คิวส่ง" hint={`${num(queue.length)} รายการแรก · ลองใหม่แบบถอยหลังเพิ่มขึ้นเรื่อย ๆ`}>
+      <Card title="คิวส่ง" hint={`${num(queue.length)} รายการแรก`}>
         {queue.length === 0 ? (
           <Empty>คิวว่าง — ส่งขึ้นเซิร์ฟเวอร์ครบแล้ว</Empty>
         ) : (
@@ -229,7 +224,7 @@ export function SyncCenter() {
         )}
       </Card>
 
-      <Card title="นโยบายเก็บข้อมูลบนเครื่อง" hint="ไม่ใช่เพราะพื้นที่ไม่พอ แต่เพราะเครื่องหายแล้วข้อมูลหายตาม">
+      <Card title="นโยบายเก็บข้อมูลบนเครื่อง">
         <Field label="เก็บบันทึกที่ซิงค์แล้วไว้" hint="วัน">
           <input
             type="number"
@@ -275,10 +270,6 @@ export function SyncCenter() {
           </button>
         </div>
         {pruned && <Note>{pruned}</Note>}
-        <Note>
-          รูปกินพื้นที่ราว 98% ของทั้งหมด (วัดจริง รูปละ ~100 KB เทียบกับเรคอร์ดละ ~550 ไบต์)
-          การลบรูปหลังซิงค์จึงเป็นตัวเลือกที่คุ้มที่สุด
-        </Note>
       </Card>
 
       {totalPending === 0 && (

@@ -18,22 +18,17 @@ export function RecordCatalog() {
 
   return (
     <>
-      <Card
-        title="บันทึกกิจกรรม"
-        hint={`บทบาท ${ROLE_LABEL[role]} · ${mine.length} กิจกรรม`}
-      >
-        <Note>
-          {readOnly
-            ? 'บัญชีนี้มีสิทธิ์ดูอย่างเดียว จึงบันทึกกิจกรรมไม่ได้ — ดูรายละเอียดของแต่ละกิจกรรมได้ตามปกติ'
-            : 'ทุกกิจกรรมบันทึกได้ตอนไม่มีสัญญาณ ระบบเก็บลงเครื่องก่อนแล้วส่งขึ้นให้เองเมื่อกลับมาออนไลน์'}
-        </Note>
-      </Card>
+      {readOnly && (
+        <Card>
+          <Note>บัญชีนี้มีสิทธิ์ดูอย่างเดียว จึงบันทึกกิจกรรมไม่ได้</Note>
+        </Card>
+      )}
 
       {PHASE_GROUPS.map((g) => {
         const items = mine.filter((a) => a.group === g)
         if (items.length === 0) return null
         return (
-          <Card key={g} title={GROUP_LABEL[g]} hint="แตะการ์ดเพื่อเปิดฟอร์มบันทึก">
+          <Card key={g} title={GROUP_LABEL[g]}>
             {items.map((a) => (
               <ActRow
                 key={a.code}
@@ -51,10 +46,7 @@ export function RecordCatalog() {
       {/* เจ้าหน้าที่สหกรณ์ไม่มีกิจกรรมภาค ก ของตัวเองเลย (SEC-02) — ชี้ทางไปหน้าที่ใช่แทน */}
       {mine.length === 0 && (
         <Card title="บทบาทนี้ไม่ได้กรอกกิจกรรมภาค ก">
-          <Note>
-            เฟสนี้เจ้าหน้าที่สหกรณ์ทำหน้าที่มอบหมายและติดตาม ไม่ได้เป็นผู้บันทึกกิจกรรมรายตัว
-            งานที่ระบบสร้างขึ้นจะรอให้ระบุผู้รับผิดชอบที่หน้ามอบหมายงาน
-          </Note>
+          <Note>เจ้าหน้าที่สหกรณ์มอบหมายและติดตามงานที่หน้ามอบหมายงาน</Note>
           <div className="row">
             <Link className="btn" to="/assign">
               ไปหน้ามอบหมายงาน <span className="go">→</span>

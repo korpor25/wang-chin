@@ -32,6 +32,11 @@ export interface FieldSpec {
   step?: number
   unit?: string
   hint?: string
+  /**
+   * ช่อง text ที่รับแค่ตัวเลข เช่น RFID 15 หลัก
+   * เก็บเป็นข้อความเพื่อไม่ให้เลขศูนย์นำหน้าหาย แต่เปิดแป้นตัวเลขและกรองตัวอื่นทิ้ง
+   */
+  digits?: boolean
   /** ค่าตั้งต้นตอนเปิดฟอร์ม ใช้กับตัวเลือกที่มีค่าปกติชัดเจน เช่น สเกล BCS ของโคเนื้อ */
   default?: unknown
   /** จำกัดให้เห็นเฉพาะบางบทบาท เช่น ช่องยืนยันผลของสัตวบาลใน ก-07 */
@@ -107,7 +112,7 @@ export const ACTIVITIES: ActivitySpec[] = [
         type: 'select',
         options: ['แข็งแรง', 'อ่อนแอ', 'ตายแรกคลอด'],
       },
-      { key: 'calfRfid', label: 'หมายเลข RFID ที่ติดให้ลูกโค', type: 'text' },
+      { key: 'calfRfid', label: 'หมายเลข RFID ที่ติดให้ลูกโค', type: 'text', digits: true },
       {
         key: 'difficulty',
         label: 'วิธีการคลอด',
@@ -134,8 +139,9 @@ export const ACTIVITIES: ActivitySpec[] = [
     code: 'ก-03',
     name: 'ให้คะแนนสภาพร่างกาย (BCS)',
     group: 'field',
-    actors: ['husbandry'],
-    trigger: 'ถึงจุดบันทึกบังคับ 4 จุดตามวงจร หรือเมื่อสัตวบาลเห็นควร',
+    // เกษตรกรให้คะแนนเองได้ระหว่างรอบ ส่วนจุดบันทึกบังคับยังเป็นงานของสัตวบาลตาม rules.ts
+    actors: ['husbandry', 'farmer'],
+    trigger: 'ถึงจุดบันทึกบังคับ 4 จุดตามวงจร หรือเมื่อเห็นว่าโคผอมหรืออ้วนขึ้น',
     detail:
       'ประเมินด้วยการมองและคลำตามสเกล 1–9 สำหรับโคเนื้อ บันทึกชนิดสเกลควบคู่กับคะแนนเสมอ และแนบภาพมุมหลังกับมุมข้างไว้สอบทาน คะแนน ณ วันคลอดมีอำนาจพยากรณ์สูงสุด',
     needsAnimal: true,
@@ -258,7 +264,7 @@ export const ACTIVITIES: ActivitySpec[] = [
       { key: 'step', label: 'ขั้นตอนที่ปฏิบัติ', type: 'text', required: true },
       { key: 'doneAt', label: 'วันและเวลาที่ปฏิบัติจริง', type: 'datetime', required: true },
       { key: 'drug', label: 'ชื่อยา', type: 'text' },
-      { key: 'dose', label: 'ขนาดที่ใช้', type: 'text', unit: 'มล.' },
+      { key: 'dose', label: 'ขนาดที่ใช้', type: 'number', unit: 'มล.', min: 0, step: 0.1 },
       { key: 'rfidConfirmed', label: 'ยืนยันตัวสัตว์ด้วย RFID แล้ว', type: 'bool' },
       { key: 'deviationReason', label: 'เหตุผลกรณีล่าช้าหรือข้ามขั้น', type: 'textarea' },
       WHO,
@@ -400,7 +406,7 @@ export const ACTIVITIES: ActivitySpec[] = [
       },
       { key: 'condition', label: 'อาการหรือโรคที่รักษา', type: 'text' },
       { key: 'drug', label: 'ชื่อยา', type: 'text' },
-      { key: 'dose', label: 'ขนาดที่ให้', type: 'text' },
+      { key: 'dose', label: 'ขนาดที่ให้', type: 'number', unit: 'มล.', min: 0, step: 0.1 },
       { key: 'withdrawalDays', label: 'ระยะหยุดยา', type: 'number', unit: 'วัน', min: 0, max: 120 },
       { key: 'site', label: 'ตำแหน่งที่เกี่ยวข้อง (กรณีกีบและขา)', type: 'text' },
       { key: 'outcome', label: 'ผลการรักษา', type: 'select', options: ['หาย', 'ดีขึ้น', 'ไม่ดีขึ้น', 'รอติดตาม'] },
@@ -461,7 +467,7 @@ export const ACTIVITIES: ActivitySpec[] = [
         required: true,
         options: ['สูญเขาลูกโค', 'ติดเบอร์หู RFID'],
       },
-      { key: 'calfRfid', label: 'หมายเลข RFID ที่ติดให้ลูกโค', type: 'text' },
+      { key: 'calfRfid', label: 'หมายเลข RFID ที่ติดให้ลูกโค', type: 'text', digits: true },
       WHO,
     ],
     derived: ['ทะเบียนลูกโคที่ติดเบอร์หูแล้ว', 'รายการลูกโคที่ยังไม่ได้สูญเขา'],

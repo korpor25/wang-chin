@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Settings as SettingsIcon,
 } from 'lucide-react'
-import { Card, Note, Pill } from '../components/ui'
+import { Card, Pill } from '../components/ui'
 import { syncSnapshot, type SyncSnapshot } from '../data/sync'
 import { db } from '../data/db'
 import { useAccount } from '../state/session'
@@ -27,11 +27,11 @@ interface Entry {
 }
 
 const ENTRIES: Entry[] = [
-  { to: '/assign', label: 'มอบหมายงาน', sub: 'งานทุกใบของทุกบทบาท ระบุผู้รับผิดชอบ สร้างงานเฉพาะกิจ', Icon: ClipboardList, roles: ['coop'] },
-  { to: '/alerts', label: 'แจ้งเตือนและกิจกรรมสหกรณ์', sub: 'รายการที่ส่งถึงคุณ ประวัติการตอบสนอง และประกาศของสหกรณ์', Icon: Bell, roles: null },
-  { to: '/inventory', label: 'คลังน้ำเชื้อ', sub: 'ล็อตที่เลือกใช้ได้และยอดคงเหลือ · อ่านอย่างเดียวในเฟสนี้', Icon: Boxes, roles: ['coop', 'husbandry'] },
-  { to: '/sync', label: 'ศูนย์ซิงค์', sub: 'รายการค้างส่ง ความขัดแย้ง และนโยบายเก็บข้อมูล', Icon: RefreshCw, roles: null },
-  { to: '/settings', label: 'ตั้งค่า', sub: 'ค่าพารามิเตอร์ชีววิทยา การนำเข้าข้อมูล และบันทึกการแก้ไข', Icon: SettingsIcon, roles: ['coop'], needsAdmin: true },
+  { to: '/assign', label: 'มอบหมายงาน', sub: 'ระบุผู้รับผิดชอบและสร้างงาน', Icon: ClipboardList, roles: ['coop'] },
+  { to: '/alerts', label: 'แจ้งเตือนและกิจกรรมสหกรณ์', sub: 'แจ้งเตือนและประกาศของสหกรณ์', Icon: Bell, roles: null },
+  { to: '/inventory', label: 'คลังน้ำเชื้อ', sub: 'ยอดคงเหลือรายล็อต', Icon: Boxes, roles: ['coop', 'husbandry'] },
+  { to: '/sync', label: 'ศูนย์ซิงค์', sub: 'รายการค้างส่ง', Icon: RefreshCw, roles: null },
+  { to: '/settings', label: 'ตั้งค่า', sub: 'พารามิเตอร์ นำเข้าข้อมูล', Icon: SettingsIcon, roles: ['coop'], needsAdmin: true },
 ]
 
 export function More() {
@@ -56,7 +56,7 @@ export function More() {
   const visible = ENTRIES.filter(
     (e) => (!e.roles || e.roles.includes(role)) && (!e.needsAdmin || isAdmin),
   )
-  const pending = (snap?.pending ?? 0) + (snap?.failed ?? 0) + (snap?.conflict ?? 0)
+  const pending = (snap?.outbox ?? 0) + (snap?.conflict ?? 0)
 
   return (
     <>
@@ -93,13 +93,6 @@ export function More() {
             </div>
           )
         })}
-      </Card>
-
-      <Card title="เกี่ยวกับระบบนี้">
-        <Note>
-          ระบบสนับสนุนการผสมเทียมโคขุน สหกรณ์การเกษตรวังชิ้น จำกัด จ.แพร่ · ใช้งานได้แม้ไม่มีสัญญาณ
-          บันทึกทุกอย่างลงเครื่องก่อน แล้วส่งขึ้นระบบให้อัตโนมัติเมื่อกลับมาออนไลน์
-        </Note>
       </Card>
     </>
   )

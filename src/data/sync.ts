@@ -100,6 +100,7 @@ async function payloadFor(item: OutboxItem): Promise<unknown> {
   if (item.table === 'records') return db.records.where('localId').equals(item.refLocalId).first()
   if (item.table === 'tasks') return db.tasks.where('localId').equals(item.refLocalId).first()
   if (item.table === 'photos') return db.photos.where('localId').equals(item.refLocalId).first()
+  if (item.table === 'farms') return db.farms.get(item.refLocalId)
   return db.animals.get(item.refLocalId)
 }
 
@@ -190,7 +191,11 @@ async function pushOne(item: OutboxItem): Promise<'ok' | 'conflict' | 'error'> {
   }
 }
 
-export async function runSync(limit = 50): Promise<SyncOutcome> {
+/**
+ * @param force ส่งทุกรายการในคิวทันทีโดยไม่รอรอบ backoff — ใช้ตอนผู้ใช้กดปุ่มส่งเอง
+ *              เพราะคนกดคาดหวังว่าจะส่งตอนนี้ ไม่ใช่อีก 10 นาที
+ */
+export async function runSync(limit = 50, force = false): Promise<SyncOutcome> {
   const t0 = performance.now()
   const out: SyncOutcome = {
     attempted: 0, succeeded: 0, failed: 0, conflicts: 0,
@@ -204,7 +209,9 @@ export async function runSync(limit = 50): Promise<SyncOutcome> {
   }
 
   const now = Date.now()
-  const due = await db.outbox.where('nextAttemptAt').belowOrEqual(now).limit(limit).toArray()
+  const due = force
+    ? await db.outbox.orderBy('id').limit(limit).toArray()
+    : await db.outbox.where('nextAttemptAt').belowOrEqual(now).limit(limit).toArray()
 
   for (const item of due) {
     if (!navigator.onLine) {
@@ -257,6 +264,31 @@ export async function runSync(limit = 50): Promise<SyncOutcome> {
   await setSetting('lastSyncAt', Date.now())
   out.ms = performance.now() - t0
   return out
+}
+
+/** ส่งทั้งคิวเป็นชุด ๆ จนหมดหรือไม่มีความคืบหน้า — สำหรับปุ่ม "ส่งข้อมูล" */
+export async function runSyncAll(maxItems = 1000): Promise<SyncOutcome> {
+  const total: SyncOutcome = {
+    attempted: 0, succeeded: 0, failed: 0, conflicts: 0,
+    bytes: 0, ms: 0, stoppedBecauseOffline: false,
+  }
+  const seen = new Set<number>()
+  while (total.attempted < maxItems) {
+    const out = await runSync(50, true)
+    total.attempted += out.attempted
+    total.succeeded += out.succeeded
+    total.failed += out.failed
+    total.conflicts += out.conflicts
+    total.bytes += out.bytes
+    total.ms += out.ms
+    total.stoppedBecauseOffline = out.stoppedBecauseOffline
+    // หยุดเมื่อคิวหมด ขาดสัญญาณ หรือรอบนี้ไม่มีอะไรออกจากคิวเลย (ล้มทุกรายการ จะวนซ้ำไม่จบ)
+    if (out.stoppedBecauseOffline || out.attempted === 0 || out.succeeded + out.conflicts === 0) break
+    const left = await db.outbox.count()
+    if (left === 0 || seen.has(left)) break
+    seen.add(left)
+  }
+  return total
 }
 
 async function markRecord(localId: string, status: SyncStatus) {
@@ -355,7 +387,9 @@ export async function syncSnapshot(): Promise<SyncSnapshot> {
     db.counters.get('records.pending'),
     db.counters.get('records.failed'),
     db.counters.get('records.conflict'),
-    db.counters.get('outbox.size'),
+    // นับจากคิวจริง ไม่ใช้ตัวนับ outbox.size — ตัวนับเคยเพี้ยนจนแถบบอกว่าส่งครบทั้งที่ยังมีของค้าง
+    // คิวมีแค่หลักสิบถึงหลักร้อยรายการ count() ทั้งตารางจึงเร็วพอ (ต่างจาก records ที่โตเป็นแสน)
+    db.outbox.count(),
     db.outbox.orderBy('id').first(),
     getSetting<number | null>('lastSyncAt', null),
   ])
@@ -363,7 +397,7 @@ export async function syncSnapshot(): Promise<SyncSnapshot> {
     pending: pending?.value ?? 0,
     failed: failed?.value ?? 0,
     conflict: conflict?.value ?? 0,
-    outbox: outbox?.value ?? 0,
+    outbox,
     oldestPendingAt: oldest?.createdAt ?? null,
     lastSyncAt,
     online: navigator.onLine,

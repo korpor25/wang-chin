@@ -5,8 +5,8 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { CalendarDays, ListChecks, MapPin } from 'lucide-react'
-import { Card, Chips, Empty, Field, Note, PageHeader, Pill, Stat, Stats } from '../components/ui'
+import { CalendarDays, MapPin } from 'lucide-react'
+import { Card, Chips, Empty, Field, PageHeader, Pill, Stat, Stats } from '../components/ui'
 import { db } from '../data/db'
 import { coopEvents, postCoopEvent } from '../data/tasks'
 import { useAccount } from '../state/session'
@@ -87,33 +87,22 @@ export function Alerts() {
 
   return (
     <>
-      <PageHeader title="แจ้งเตือน" sub="รายการที่ส่งถึงคุณ และประกาศของสหกรณ์" />
+      <PageHeader title="แจ้งเตือน" />
       <Card>
         <Chips value={section} options={SECTIONS} onChange={setSection} />
-        <Note>
-          <b>แจ้งเตือน</b> คือสิ่งที่ต้องรับทราบแล้วไปทำงานต่อ ส่วน <b>กิจกรรมสหกรณ์</b> คือประกาศที่รับทราบเฉย ๆ
-          — งานที่ต้องลงมือทำแล้วบันทึกผลอยู่ที่หน้า{' '}
-          <Link to="/tasks" className="link-more">
-            <ListChecks size={13} className="ic-inline" /> งานของฉัน
-          </Link>
-        </Note>
       </Card>
 
       {section === 'events' && <EventsSection />}
 
       {section === 'alerts' && (
       <>
-      <Card hint="ระบบส่งล่วงหน้าตามกฎของแต่ละบทบาท">
+      <Card>
         <Stats>
           <Stat label="ส่งแล้ว" value={num(sent)} sub="ครั้ง" />
           <Stat label="อัตราเปิดอ่าน" value={pct(read, sent)} />
           <Stat label="อัตรายืนยันจะปฏิบัติ" value={pct(acked, sent)} />
         </Stats>
         <Chips value={view} options={OPTIONS} onChange={setView} />
-        <Note>
-          ตัวเลขสองค่านี้ใช้แยกสาเหตุของงานที่ไม่ถูกทำ — เปิดอ่านต่ำแปลว่าช่องทางแจ้งมีปัญหา
-          ส่วนเปิดอ่านสูงแต่ยืนยันต่ำแปลว่าปัญหาอยู่ที่การปฏิบัติ
-        </Note>
       </Card>
 
       <Card title={OPTIONS.find((o) => o.value === view)?.label} hint={`${num(rows.length)} รายการ`}>
@@ -333,7 +322,6 @@ function EventComposer({ onPosted }: { onPosted: () => void }) {
           {busy ? 'กำลังประกาศ…' : 'ประกาศ'}
         </button>
       </div>
-      <Note>ประกาศนี้ไม่สร้างงานและไม่นับรวมกับอัตราการตอบสนองต่อแจ้งเตือน</Note>
     </>
   )
 }

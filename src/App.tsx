@@ -8,6 +8,7 @@ import { AppShell } from './components/AppShell'
 import { Dashboard } from './routes/Dashboard'
 import { Animals } from './routes/Animals'
 import { AnimalDetail } from './routes/AnimalDetail'
+import { AnimalNew } from './routes/AnimalNew'
 import { RecordCatalog, RecordForm } from './routes/Record'
 import { Tasks } from './routes/Tasks'
 import { More } from './routes/More'
@@ -114,6 +115,14 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
           <Route path="animals" element={<Animals />} />
+          <Route
+            path="animals/new"
+            element={
+              <Require roles={['husbandry', 'coop']}>
+                <AnimalNew />
+              </Require>
+            }
+          />
           <Route path="animals/:id" element={<AnimalDetail />} />
           <Route path="record" element={<RecordCatalog />} />
           <Route path="record/:code" element={<RecordForm />} />

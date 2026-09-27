@@ -114,7 +114,6 @@ export function AnimalDetail() {
                   <li key={b}>{b}</li>
                 ))}
               </ul>
-              <Note>ระบบจะเตือนก่อนบันทึกการผสม แต่ไม่ห้ามขาด เพราะหน้างานอาจมีเหตุจำเป็น</Note>
             </Card>
           )}
 

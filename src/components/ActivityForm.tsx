@@ -253,8 +253,26 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
             <Note>สร้างกำหนดการถัดไปให้อัตโนมัติ {done.tasksCreated} รายการ ดูได้ที่หน้างาน</Note>
           )}
 
+          {/* คลอดแล้วต้องมีลูกโคในทะเบียนด้วย — พาไปฟอร์มเพิ่มโคพร้อมกรอกแม่ RFID และวันเกิดให้ */}
+          {spec.code === 'ก-02' && animalId && values.calfCondition !== 'ตายแรกคลอด' && (
+            <div className="row">
+              <button
+                className="btn"
+                onClick={() => {
+                  const q = new URLSearchParams({ dam: animalId })
+                  if (values.calfRfid) q.set('rfid', String(values.calfRfid))
+                  if (values.calfSex) q.set('sex', String(values.calfSex))
+                  if (values.calvedAt) q.set('born', String(values.calvedAt).slice(0, 10))
+                  nav(`/animals/new?${q}`)
+                }}
+              >
+                เพิ่มลูกโคเข้าฝูง <span className="go">→</span>
+              </button>
+            </div>
+          )}
+
           <div className="row">
-            <button className="btn" onClick={() => setDone(null)}>
+            <button className={spec.code === 'ก-02' ? 'btn ghost' : 'btn'} onClick={() => setDone(null)}>
               บันทึกอีกรายการ
             </button>
             {animalId && (
@@ -274,14 +292,10 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   return (
     <>
       <PageHeader title={spec.name} sub={spec.code} />
-      <div className="form-head">
-        <p>{spec.detail}</p>
-        <p className="hint tiny">ทำเมื่อ: {spec.trigger}</p>
-      </div>
 
       {spec.needsAnimal && (
         <div ref={pickerRef} className={flash ? 'flash' : undefined}>
-        <Card title="ตัวสัตว์" hint="ยืนยันด้วย RFID หรือเบอร์หู">
+        <Card title="ตัวสัตว์">
           {animal ? (
             <div className="picked">
               <div className="picked-main">
@@ -316,7 +330,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
 
       {locked ? (
         <Card title="รายละเอียดที่ต้องบันทึก">
-          <Empty>เลือกตัวโคก่อน แล้วช่องกรอกจะเปิดให้ — ระบบต้องรู้ว่าบันทึกนี้เป็นของตัวไหน</Empty>
+          <Empty>เลือกตัวโคก่อน แล้วช่องกรอกจะเปิดให้</Empty>
           <div className="row">
             <button className="btn" onClick={focusPicker}>
               เลือกตัวโค <span className="go">↑</span>
@@ -365,14 +379,6 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
         <BcsPanel score={Number(values.score)} params={params} />
       )}
 
-      <Card title="ระบบจะทำอะไรต่อ">
-        <ul className="derived">
-          {spec.derived.map((d) => (
-            <li key={d}>{d}</li>
-          ))}
-        </ul>
-      </Card>
-
       {shown.length > 0 && !locked && readOnly && (
         <Card>
           <Empty>บัญชีนี้มีสิทธิ์ดูอย่างเดียว จึงบันทึกกิจกรรมนี้ไม่ได้</Empty>
@@ -384,7 +390,6 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
           <button className="btn full" onClick={() => void submit()} disabled={saving}>
             {saving ? 'กำลังบันทึก…' : 'บันทึก'}
           </button>
-          <p className="hint tiny center">บันทึกได้แม้ไม่มีสัญญาณ ระบบจะส่งขึ้นให้เองเมื่อกลับมาออนไลน์</p>
         </div>
       )}
     </>
@@ -464,7 +469,7 @@ function FieldInput({
 
   if (f.type === 'photo') {
     return (
-      <Field label={f.label} hint="บีบอัดอัตโนมัติก่อนเก็บ">
+      <Field label={f.label}>
         <label className="btn ghost photo-pick">
           <Camera size={17} /> ถ่ายหรือเลือกรูป
           <input
@@ -642,8 +647,17 @@ function FieldInput({
         min={f.min}
         max={f.max}
         step={f.step}
-        inputMode={f.type === 'number' ? 'decimal' : undefined}
-        onChange={(e) => onChange(f.type === 'number' ? e.target.valueAsNumber : e.target.value)}
+        inputMode={f.type === 'number' ? 'decimal' : f.digits ? 'numeric' : undefined}
+        pattern={f.digits ? '[0-9]*' : undefined}
+        onChange={(e) =>
+          onChange(
+            f.type === 'number'
+              ? e.target.valueAsNumber
+              : f.digits
+                ? e.target.value.replace(/\D/g, '')
+                : e.target.value,
+          )
+        }
       />
       {error && <ErrorText msg={error} />}
     </Field>

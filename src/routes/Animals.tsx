@@ -1,7 +1,7 @@
 /** ทะเบียนโค — ค้นด้วย RFID/เบอร์หู กรองตามระยะของวงจรและฟาร์ม */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { ScanLine } from 'lucide-react'
+import { Download, Plus, ScanLine } from 'lucide-react'
 import { Card, Chips, Empty, Note, Pill, SearchBox } from '../components/ui'
 import { CYCLE_LABEL, parityLabel, type Animal, type BioParams, type CycleStage, type Farm, type Role } from '../domain/types'
 import { getParams, searchAnimals } from '../data/queries'
@@ -11,6 +11,7 @@ import { addDays } from '../domain/rules'
 import { BAND_TONE, bcsBand } from '../domain/bcs'
 import { db } from '../data/db'
 import { animalAge, num } from '../lib/format'
+import { downloadMatrixCsv, herdMatrix } from '../data/herdMatrix'
 
 const dayShort = (ts: number) =>
   new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
@@ -145,7 +146,7 @@ function canDo(code: string | null, role: Role): boolean {
 }
 
 export function Animals() {
-  const { role } = useAccount()
+  const { role, readOnly } = useAccount()
   const [q, setQ] = useState('')
   const [stage, setStage] = useState<StageFilter>('all')
   const [parity, setParity] = useState<number | 'all'>('all')
@@ -181,7 +182,26 @@ export function Animals() {
 
   return (
     <>
-      <Card title="ทะเบียนโค" hint={`ทั้งหมด ${num(total)} ตัว`}>
+      <Card
+        title="ทะเบียนโค"
+        hint={`ทั้งหมด ${num(total)} ตัว`}
+        action={
+          <div className="row tight">
+            {/* เพิ่มทีละตัวเป็นงานของสัตวบาลที่ติดแท็กหน้างาน เกษตรกรแจ้งผ่านการแจ้งคลอดแทน */}
+            {role !== 'farmer' && !readOnly && (
+              <Link className="btn ghost mini" to="/animals/new">
+                <Plus size={15} /> เพิ่มโค
+              </Link>
+            )}
+            <button
+              className="btn ghost mini"
+              onClick={() => void herdMatrix().then(({ rows, sum }) => downloadMatrixCsv(rows, sum))}
+            >
+              <Download size={15} /> สรุปรายฟาร์ม
+            </button>
+          </div>
+        }
+      >
         <SearchBox value={q} onChange={setQ} placeholder="ค้นด้วย RFID เบอร์หู หรือสายพันธุ์" />
         <Chips value={stage} options={STAGE_OPTIONS} onChange={setStage} />
         {stage === 'heifer' && <Chips value={parity} options={PARITY_OPTIONS} onChange={setParity} />}
@@ -197,8 +217,7 @@ export function Animals() {
           </select>
         </label>
         <Note>
-          <ScanLine size={14} className="ic-inline" /> สแกน RFID จากเครื่องอ่าน
-          หรือพิมพ์หมายเลขก็ได้ ระบบจะเปิดทะเบียนของตัวที่ตรงกันให้ทันที
+          <ScanLine size={14} className="ic-inline" /> สแกน RFID หรือพิมพ์หมายเลขเพื่อค้นหา
         </Note>
       </Card>
 

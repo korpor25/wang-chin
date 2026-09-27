@@ -269,7 +269,7 @@ export interface Alert {
 export interface OutboxItem {
   id?: number
   localId: string
-  table: 'records' | 'photos' | 'tasks' | 'animals'
+  table: 'records' | 'photos' | 'tasks' | 'animals' | 'farms'
   op: 'create' | 'update' | 'delete'
   refLocalId: string
   bytes: number

@@ -12,7 +12,6 @@ import {
   Chips,
   Empty,
   Field,
-  Note,
   PageHeader,
   Pill,
   SearchBox,
@@ -124,9 +123,9 @@ export function Assign() {
 
   return (
     <>
-      <PageHeader title="มอบหมายงาน" sub="เห็นงานทุกใบของทุกบทบาท และระบุผู้รับผิดชอบรายบุคคล" />
+      <PageHeader title="มอบหมายงาน" />
 
-      <Card hint="งานที่ระบบสร้างจะยังไม่มีชื่อผู้รับผิดชอบจนกว่าเจ้าหน้าที่จะระบุ">
+      <Card>
         <Stats quad>
           <Stat label="ในรายการนี้" value={counts.total} sub="งาน" />
           <Stat label="ยังไม่ระบุผู้รับ" value={counts.unassigned} sub="งาน" tone="warn" />
@@ -261,7 +260,6 @@ export function Assign() {
 
       <Card
         title="สร้างงานเฉพาะกิจ"
-        hint="งานที่ไม่ได้มาจากการคำนวณ เช่น ให้ไปตรวจซ้ำหรือไปเก็บข้อมูลเพิ่ม"
         action={
           account.readOnly ? undefined : (
             <button
@@ -282,11 +280,7 @@ export function Assign() {
               void load()
             }}
           />
-        ) : (
-          <Note>
-            งานที่สร้างเองจะเข้ากล่องงานของผู้รับผิดชอบทันที และปิดได้ด้วยการบันทึกกิจกรรมตามปกติ
-          </Note>
-        )}
+        ) : null}
       </Card>
     </>
   )
