@@ -225,48 +225,50 @@ export function Animals() {
         {rows.length === 0 ? (
           <Empty>ไม่พบโคที่ตรงกับเงื่อนไข</Empty>
         ) : (
-          rows.map((a, i) => {
-            const tone = STAGE_TONE[a.stage]
-            const next = nextStep(a, params)
-            return (
-              <div className="beast" key={a.id}>
-                <div className="beast-head">
-                  <span className="beast-no">{i + 1}</span>
-                  <Link className="beast-tag" to={`/animals/${a.id}`}>
-                    {a.tagNo}
-                  </Link>
-                  <Pill tone={tone}>{CYCLE_LABEL[a.stage]}</Pill>
-                  <span className="beast-bcs">
-                    {/* สีเดียวกับตารางให้คะแนนในฟอร์ม ก-03 — แดงผอม เขียวสมบูรณ์ น้ำเงินอ้วน */}
-                    <Pill tone={a.lastBcs !== null ? BAND_TONE[bcsBand(a.lastBcs)] : 'mute'}>
-                      {a.lastBcs !== null ? `BCS ${a.lastBcs.toFixed(1)}` : 'ยังไม่ประเมิน'}
-                    </Pill>
-                  </span>
-                </div>
-
-                <div className="beast-name">
-                  {a.breed} {a.bloodPct}% · {animalAge(a.birthDate)} · {parityLabel(a.parity)} ·{' '}
-                  {farmName.get(a.farmId) ?? a.farmId}
-                </div>
-
-                <div className={`beast-strip ${next.tone}`}>{next.line}</div>
-
-                {/* SEC-05 — ปุ่มบันทึกโผล่เฉพาะกิจกรรมที่บทบาทนี้ทำได้จริง
-                    ไม่งั้นเกษตรกรจะได้ปุ่มพาไปฟอร์มของสัตวบาล */}
-                <div className="row snug">
-                  {canDo(next.code, role) ? (
-                    <Link className={`btn ${next.tone === 'ok' ? '' : next.tone}`.trim()} to={next.to}>
-                      {next.action} <span className="go">→</span>
+          <div className="beast-grid">
+            {rows.map((a, i) => {
+              const tone = STAGE_TONE[a.stage]
+              const next = nextStep(a, params)
+              return (
+                <div className="beast" key={a.id}>
+                  <div className="beast-head">
+                    <span className="beast-no">{i + 1}</span>
+                    <Link className="beast-tag" to={`/animals/${a.id}`}>
+                      {a.tagNo}
                     </Link>
-                  ) : (
-                    <Link className="btn ghost" to={`/animals/${a.id}`}>
-                      ดูทะเบียนโค <span className="go">→</span>
-                    </Link>
-                  )}
+                    <Pill tone={tone}>{CYCLE_LABEL[a.stage]}</Pill>
+                    <span className="beast-bcs">
+                      {/* สีเดียวกับตารางให้คะแนนในฟอร์ม ก-03 — แดงผอม เขียวสมบูรณ์ น้ำเงินอ้วน */}
+                      <Pill tone={a.lastBcs !== null ? BAND_TONE[bcsBand(a.lastBcs)] : 'mute'}>
+                        {a.lastBcs !== null ? `BCS ${a.lastBcs.toFixed(1)}` : 'ยังไม่ประเมิน'}
+                      </Pill>
+                    </span>
+                  </div>
+
+                  <div className="beast-name">
+                    {a.breed} {a.bloodPct}% · {animalAge(a.birthDate)} · {parityLabel(a.parity)} ·{' '}
+                    {farmName.get(a.farmId) ?? a.farmId}
+                  </div>
+
+                  <div className={`beast-strip ${next.tone}`}>{next.line}</div>
+
+                  {/* SEC-05 — ปุ่มบันทึกโผล่เฉพาะกิจกรรมที่บทบาทนี้ทำได้จริง
+                      ไม่งั้นเกษตรกรจะได้ปุ่มพาไปฟอร์มของสัตวบาล */}
+                  <div className="row snug">
+                    {canDo(next.code, role) ? (
+                      <Link className={`btn ${next.tone === 'ok' ? '' : next.tone}`.trim()} to={next.to}>
+                        {next.action} <span className="go">→</span>
+                      </Link>
+                    ) : (
+                      <Link className="btn ghost" to={`/animals/${a.id}`}>
+                        ดูทะเบียนโค <span className="go">→</span>
+                      </Link>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </Card>
     </>

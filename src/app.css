@@ -170,25 +170,63 @@
   overflow: hidden;
 }
 
+/* จอคอม — แถบเมนูย้ายไปเป็นแถบข้างซ้าย ลอยเป็นการ์ดเหมือนหัวแอป
+   เดิมวางเป็นแถบบนต่อจากหัวแอป แต่แถบหดตามเนื้อหาจนชื่อเมนูตัดบรรทัด
+   และ sticky ที่ top: 0 เท่ากับหัวแอป พอเลื่อนลงแถบจึงไปทับหัวแอป */
 @media (min-width: 860px) {
+  .shell {
+    --side-w: 208px;
+    padding-left: calc(var(--side-w) + var(--sp-4));
+  }
   .tabbar {
-    position: sticky;
-    top: 0;
+    top: var(--sp-3);
+    bottom: var(--sp-3);
+    left: var(--sp-4);
+    right: auto;
+    width: var(--side-w);
+    flex-direction: column;
+    gap: var(--sp-1);
+    background: var(--card);
     border: 1px solid var(--hair);
     border-radius: var(--r-lg);
-    box-shadow: var(--s1);
-    padding: var(--sp-2);
-    max-width: 960px;
-    margin: var(--sp-3) auto 0;
+    box-shadow:
+      0 1px 2px rgba(16, 38, 26, 0.04),
+      0 4px 10px -6px rgba(16, 38, 26, 0.1);
+    padding: var(--sp-3);
   }
   .tabbar a {
+    flex: none;
     flex-direction: row;
-    gap: var(--sp-2);
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
     font-size: var(--fs-sm);
+    transition:
+      background-color 0.14s ease,
+      color 0.14s ease;
+  }
+  .tabbar a:hover {
+    background: var(--panel);
+    color: var(--ink);
+  }
+  .tabbar a.on {
+    background: var(--brand-soft);
+    color: var(--brand);
+  }
+  .tabbar a.on:hover {
+    color: var(--brand);
+  }
+  /* แท็บที่เลือกใช้พื้นสีแทนจุด จุดลอยเหนือไอคอนเข้ากับแถบแนวนอนเท่านั้น */
+  .tabbar a.on::before {
+    display: none;
+  }
+  .tabbar a:active,
+  .tabbar a.on svg {
+    transform: none;
   }
   .tabbar .dot {
     position: static;
     transform: none;
+    margin-left: auto;
   }
 }
 
@@ -570,9 +608,28 @@
     bottom: var(--sp-4);
   }
 
-  /* จอกว้าง แถบเมนูย้ายไปอยู่บน ไม่ต้องเผื่อที่ด้านล่างแล้ว */
+  /* จอกว้าง แถบเมนูย้ายไปอยู่ข้าง ไม่ต้องเผื่อที่ด้านล่างแล้ว
+     ช่องไฟซ้ายขวาเท่ากับหัวแอป ขอบการ์ดเนื้อหาจึงตรงกับขอบหัวแอปพอดี */
   .shell-body {
-    padding-bottom: var(--sp-8);
+    max-width: calc(960px + 2 * var(--sp-4));
+    padding: 0 var(--sp-4) var(--sp-8);
+  }
+
+  /* รายการโคเป็นการ์ดเตี้ย ๆ เรียงสองคอลัมน์ ไม่ต้องไล่เลื่อนยาวทีละตัว */
+  .beast-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
+  .beast-grid > .beast {
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  /* ปุ่มชิดก้นการ์ด การ์ดข้างกันที่ข้อความยาวไม่เท่ากันจะได้ปุ่มแนวเดียวกัน */
+  .beast-grid > .beast > .row.snug {
+    margin-top: auto;
+    padding-top: var(--sp-3);
   }
 
   .toasts {
