@@ -12,7 +12,6 @@ import {
   PageHeader,
   Pill,
   SearchBox,
-  Skeleton,
   Stat,
   Stats,
 } from '../components/ui'

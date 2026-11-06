@@ -242,13 +242,13 @@ export function Animals() {
         <Chips value={stage} options={STAGE_OPTIONS} onChange={setStage} />
         {stage === 'heifer' && <Chips value={parity} options={PARITY_OPTIONS} onChange={setParity} />}
         {/* สำหรับเกษตรกร ให้เห็นเฉพาะฟาร์มของตัวเอง และเลือก "ทุกฟาร์มของฉัน" ได้ */}
-        {role === 'farmer' && account?.farmIds?.length > 0 && (
+        {role === 'farmer' && account?.farmIds && account.farmIds.length > 0 && (
           <label className="field">
             <span>ฟาร์มของฉัน</span>
             <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
               <option value="all">ทุกฟาร์มของฉัน</option>
               {farms
-                .filter((f) => account.farmIds.includes(f.id))
+                .filter((f) => account?.farmIds?.includes(f.id))
                 .map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.code} · {f.name}
