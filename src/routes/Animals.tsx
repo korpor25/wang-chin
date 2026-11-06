@@ -6,7 +6,7 @@ import { Card, Chips, Empty, Note, Pill, SearchBox } from '../components/ui'
 import { CYCLE_LABEL, parityLabel, type Animal, type BioParams, type CycleStage, type Farm, type Role } from '../domain/types'
 import { getParams, searchAnimals } from '../data/queries'
 import { ACTIVITY_BY_CODE } from '../domain/activities'
-import { useAccount } from '../state/session'
+import { useAccount, useSession } from '../state/session'
 import { addDays } from '../domain/rules'
 import { BAND_TONE, bcsBand } from '../domain/bcs'
 import { db } from '../data/db'
@@ -156,27 +156,58 @@ export function Animals() {
   const [total, setTotal] = useState(0)
   const [params, setParams] = useState<BioParams | null>(null)
 
+  const account = useSession((s) => s.account) // Get full account for farmIds
+
   useEffect(() => {
     void db.farms.toArray().then(setFarms)
-    void db.animals.count().then(setTotal)
+    void (async () => {
+      if (role === 'farmer' && account?.farmIds?.length) {
+        const count = await db.animals
+          .where('farmId')
+          .anyOf(account.farmIds)
+          .count()
+        setTotal(count)
+      } else {
+        const count = await db.animals.count()
+        setTotal(count)
+      }
+    })()
     void getParams().then(setParams)
-  }, [])
+  }, [role, account])
+
+  useEffect(() => {
+    if (role === 'farmer' && account?.farmIds?.length) {
+      setFarmId('all')
+    }
+  }, [role, account])
 
   useEffect(() => {
     let alive = true
+
+    // สำหรับเกษตรกร ถ้าเลือก 'all' ให้ส่ง farmIds ทั้งหมดไปกรองที่ query
+    const effectiveFarmId = (role === 'farmer' && farmId === 'all')
+      ? undefined
+      : (farmId === 'all' ? undefined : farmId)
+
     void searchAnimals({
       q,
       stage,
-      farmId: farmId || undefined,
+      farmId: effectiveFarmId || undefined,
       parity: stage === 'heifer' && parity !== 'all' ? parity : undefined,
       limit: 120,
     }).then((r) => {
-      if (alive) setRows(r)
+      if (alive) {
+        // ถ้าเป็นเกษตรกร ต้องมั่นใจว่าผลลัพธ์ที่ได้มาเป็นของฟาร์มตัวเองเท่านั้น
+        const filtered = role === 'farmer' && account?.farmIds
+          ? r.filter(a => account.farmIds.includes(a.farmId))
+          : r
+        setRows(filtered)
+      }
     })
     return () => {
       alive = false
     }
-  }, [q, stage, farmId, parity])
+  }, [q, stage, farmId, parity, role, account])
 
   const farmName = useMemo(() => new Map(farms.map((f) => [f.id, f.name])), [farms])
 
@@ -186,18 +217,23 @@ export function Animals() {
         title="ทะเบียนโค"
         hint={`ทั้งหมด ${num(total)} ตัว`}
         action={
-          <div className="row tight">
-            {/* เพิ่มทีละตัวเป็นงานของสัตวบาลที่ติดแท็กหน้างาน เกษตรกรแจ้งผ่านการแจ้งคลอดแทน */}
+          <div className="row tight" style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {role !== 'farmer' && !readOnly && (
-              <Link className="btn ghost mini" to="/animals/new">
-                <Plus size={15} /> เพิ่มโค
-              </Link>
+              <>
+                <Link className="btn ghost mini" to="/animals/new" style={{ whiteSpace: 'nowrap' }}>
+                  <Plus size={15} /> เพิ่มโค
+                </Link>
+                <Link className="btn ghost mini" to="/import" style={{ whiteSpace: 'nowrap' }}>
+                  <ScanLine size={15} /> นำเข้า
+                </Link>
+              </>
             )}
             <button
               className="btn ghost mini"
               onClick={() => void herdMatrix().then(({ rows, sum }) => downloadMatrixCsv(rows, sum))}
+              style={{ whiteSpace: 'nowrap' }}
             >
-              <Download size={15} /> สรุปรายฟาร์ม
+              <Download size={15} /> สรุป
             </button>
           </div>
         }
@@ -205,17 +241,37 @@ export function Animals() {
         <SearchBox value={q} onChange={setQ} placeholder="ค้นด้วย RFID เบอร์หู หรือสายพันธุ์" />
         <Chips value={stage} options={STAGE_OPTIONS} onChange={setStage} />
         {stage === 'heifer' && <Chips value={parity} options={PARITY_OPTIONS} onChange={setParity} />}
-        <label className="field">
-          <span>ฟาร์ม</span>
-          <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
-            <option value="">ทุกฟาร์ม</option>
-            {farms.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.code} · {f.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* สำหรับเกษตรกร ให้เห็นเฉพาะฟาร์มของตัวเอง และเลือก "ทุกฟาร์มของฉัน" ได้ */}
+        {role === 'farmer' && account?.farmIds?.length > 0 && (
+          <label className="field">
+            <span>ฟาร์มของฉัน</span>
+            <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+              <option value="all">ทุกฟาร์มของฉัน</option>
+              {farms
+                .filter((f) => account.farmIds.includes(f.id))
+                .map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.code} · {f.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        )}
+
+        {/* สำหรับบทบาทอื่น ให้เห็นทุกฟาร์มและเลือก "ทุกฟาร์ม" ได้ */}
+        {role !== 'farmer' && (
+          <label className="field">
+            <span>ฟาร์ม</span>
+            <select value={farmId} onChange={(e) => setFarmId(e.target.value)}>
+              <option value="">ทุกฟาร์ม</option>
+              {farms.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.code} · {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <Note>
           <ScanLine size={14} className="ic-inline" /> สแกน RFID หรือพิมพ์หมายเลขเพื่อค้นหา
         </Note>

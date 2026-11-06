@@ -23,7 +23,7 @@ export function Card({
             {title && <h2>{title}</h2>}
             {hint && <p>{hint}</p>}
           </div>
-          {action}
+          {action && <div className="card-actions">{action}</div>}
         </header>
       )}
       {children}

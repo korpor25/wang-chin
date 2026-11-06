@@ -295,7 +295,7 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
 
       {spec.needsAnimal && (
         <div ref={pickerRef} className={flash ? 'flash' : undefined}>
-        <Card title="ตัวสัตว์">
+        <Card title="ตัวโค">
           {animal ? (
             <div className="picked">
               <div className="picked-main">
@@ -674,32 +674,48 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
   const [hits, setHits] = useState<Animal[]>([])
   const [recent, setRecent] = useState<Animal[]>([])
   const [focused, setFocused] = useState(false)
-  // เกษตรกรเลือกได้เฉพาะโคในฟาร์มตัวเอง ยังไม่รู้ขอบเขตก็ยังไม่ต้องคิวรี
-  const [scope, setScope] = useState<string[] | null>(role === 'farmer' ? null : [])
+  // เกษตรกรเลือกได้เฉพาะโคในฟาร์มตัวเอง
+  const [scope, setScope] = useState<string[]>(role === 'farmer' ? [] : [])
 
   useEffect(() => {
     if (role !== 'farmer') return
     let alive = true
-    void db.users.get(userId).then((u) => alive && setScope(u?.farmIds ?? []))
+    void db.users.get(userId).then((u) => {
+      if (alive) setScope(u?.farmIds ?? [])
+    })
     return () => {
       alive = false
     }
   }, [role, userId])
 
   useEffect(() => {
-    if (!open || !scope) return
+    if (!open) return
     let alive = true
-    void recentAnimals(4, scope).then((r) => alive && setRecent(r))
+    void recentAnimals(4, scope).then((r) => {
+      if (alive) {
+        // กรองซ้ำอีกชั้นให้ชัวร์ว่าไม่มีวัวฟาร์มอื่นหลุดมา
+        const filtered = role === 'farmer' && scope.length > 0
+          ? r.filter(a => scope.includes(a.farmId))
+          : r
+        setRecent(filtered)
+      }
+    })
     return () => {
       alive = false
     }
   }, [open, scope])
 
   useEffect(() => {
-    if (!open || !scope || q.trim() === '') return
+    if (!open || q.trim() === '') return
     let alive = true
-    void searchAnimals({ q, limit: 25 }).then((r) => {
-      if (alive) setHits(scope.length ? r.filter((a) => scope.includes(a.farmId)) : r)
+    void searchAnimals({ q, farmIds: scope, limit: 25 }).then((r) => {
+      if (alive) {
+        // กรองซ้ำอีกชั้นให้ชัวร์ว่าไม่มีวัวฟาร์มอื่นหลุดมา
+        const filtered = role === 'farmer' && scope.length > 0
+          ? r.filter(a => scope.includes(a.farmId))
+          : r
+        setHits(filtered)
+      }
     })
     return () => {
       alive = false

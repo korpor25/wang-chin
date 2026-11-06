@@ -5,6 +5,7 @@ import App from './App.tsx'
 import './fonts.css'
 import './index.css'
 import './app.css'
+import { seedDemoData } from './data/db'
 
 // service worker ทำให้แอปเปิดได้ตอนไม่มีเน็ต และเป็นเงื่อนไขให้ติดตั้งเป็น PWA ได้
 registerSW({
@@ -14,8 +15,13 @@ registerSW({
   },
 })
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+async function init() {
+  await seedDemoData()
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
+
+init()

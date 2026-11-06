@@ -1,7 +1,3 @@
-/**
- * ระบบสนับสนุนการผสมเทียมโคขุน สหกรณ์การเกษตรวังชิ้น จำกัด
- * ทำงานแบบออฟไลน์ก่อนเสมอ: บันทึกลงเครื่องทันที แล้วส่งขึ้นระบบเมื่อมีสัญญาณ
- */
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 import { AppShell } from './components/AppShell'
@@ -19,7 +15,8 @@ import { Settings } from './routes/Settings'
 import { Assign } from './routes/Assign'
 import { Login } from './routes/Login'
 import { NotFound } from './routes/NotFound'
-
+import { HerdImport } from './components/HerdImport'
+import { TaskCenter } from './routes/TaskCenter'
 import { renameLegacyLabels, seedIfEmpty } from './data/seed'
 import { getParams } from './data/queries'
 import { runEscalation } from './data/tasks'
@@ -28,10 +25,6 @@ import { useAccount, useSession } from './state/session'
 import type { Role } from './domain/types'
 import { Card, Empty, Skeleton } from './components/ui'
 
-/**
- * กันการเข้าถึงด้วยการพิมพ์ URL ตรง ๆ — ซ่อนเมนูอย่างเดียวไม่พอ
- * เมื่อต่อ backend จริงต้องมีการตรวจสิทธิ์ซ้ำที่ฝั่งเซิร์ฟเวอร์ด้วยเสมอ
- */
 function Require({
   roles,
   admin,
@@ -51,11 +44,6 @@ function Require({
   )
 }
 
-/**
- * หน้าที่อยู่นอกขอบเขตเฟสนี้ — เก็บโค้ดไว้ แต่ยังไม่เปิดให้เข้า
- * เฟสนี้ทำเฉพาะภาค ก รายงาน (ค-06) และทะเบียนฟาร์ม/สมาชิก จึงยกไปพร้อมกัน
- * เปิดใช้เมื่อถึงเฟสถัดไปได้ด้วยการเปลี่ยน element กลับเป็นหน้าจริง
- */
 function NextPhase({ title, why }: { title: string; why: string }) {
   return (
     <Card title={title}>
@@ -75,15 +63,9 @@ export default function App() {
     void seedIfEmpty()
       .then(() => renameLegacyLabels())
       .finally(() => setDataReady(true))
-    // OFF-08 — ขอสิทธิ์เก็บข้อมูลถาวรตั้งแต่เปิดแอป ไม่งั้นงานภาคสนามยังอยู่ในสถานะ
-    // best-effort ที่ระบบลบทิ้งได้เองเมื่อพื้นที่ใกล้เต็ม
     void requestPersist().catch(() => undefined)
   }, [restore])
 
-  /**
-   * ตัวรันของ ค-04 — งานที่เลยกำหนดต้องถูกยกระดับจริง ไม่ใช่มีแต่สถานะรออยู่เฉย ๆ
-   * รันตอนเปิดแอปและทุก 15 นาทีระหว่างเปิดค้างไว้ ทำงานได้แม้ออฟไลน์เพราะคำนวณจากในเครื่อง
-   */
   useEffect(() => {
     if (!dataReady || !account) return
     let alive = true
@@ -126,7 +108,14 @@ export default function App() {
           <Route path="animals/:id" element={<AnimalDetail />} />
           <Route path="record" element={<RecordCatalog />} />
           <Route path="record/:code" element={<RecordForm />} />
-          <Route path="tasks" element={<Tasks />} />
+          <Route
+            path="tasks"
+            element={
+              <Require roles={['husbandry', 'coop', 'farmer']}>
+                <TaskCenter />
+              </Require>
+            }
+          />
           <Route path="more" element={<More />} />
           <Route path="alerts" element={<Alerts />} />
           <Route
@@ -153,14 +142,6 @@ export default function App() {
                 title="รายงานและตัวชี้วัด"
                 why="รายงานคือกิจกรรม ค-06 ซึ่งยกไปเฟสถัดไปพร้อมภาคอื่น ตัวเลขสรุปเท่าที่ภาค ก ต้องใช้อยู่บนหน้าหลักแล้ว"
               />
-            }
-          />
-          <Route
-            path="assign"
-            element={
-              <Require roles={['coop']}>
-                <Assign />
-              </Require>
             }
           />
           <Route path="sync" element={<SyncCenter />} />

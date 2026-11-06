@@ -8,8 +8,56 @@
   background: var(--paper);
 }
 
+.card header {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--hair);
+}
+
+@media (max-width: 600px) {
+  .card header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-4);
+  }
+}
+
+.card-head-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-head-main h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.card-head-main p {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
 .shell-head {
   position: sticky;
+
   top: 0;
   z-index: 20;
   /* พื้นหลังโปร่งเบลอ ให้เนื้อหาที่เลื่อนผ่านใต้การ์ดไม่ทะลุออกมา */
@@ -643,13 +691,14 @@
   margin-top: var(--sp-4);
   border-radius: var(--r-sm);
   border: 1px solid var(--hair);
+  -webkit-overflow-scrolling: touch;
 }
 
 table.data {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-sm);
-  min-width: 520px;
+  min-width: 600px;
 }
 
 table.data th,
@@ -2078,10 +2127,12 @@ table.data td.wrap {
   font-weight: var(--fw-bold);
   color: var(--ink);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .beast-bcs {
   margin-left: auto;
+  flex: none;
 }
 
 .beast-name {

@@ -33,17 +33,27 @@ import { Toasts, toast } from './Toast'
  * ซึ่งตรงกับบทบาทจริงในเฟสนี้คือมอบหมายและติดตาม
  */
 function tabsFor(role: Role) {
-  const mid =
-    role === 'coop'
-      ? { to: '/assign', label: 'มอบหมาย', Icon: ClipboardList, end: false }
-      : { to: '/record', label: 'บันทึก', Icon: ClipboardPlus, end: false }
-  return [
+  const tabs = [
     { to: '/', label: 'หน้าหลัก', Icon: Home, end: true },
     { to: '/animals', label: 'ฝูงโค', Icon: Beef, end: false },
-    mid,
-    { to: '/tasks', label: 'งาน', Icon: ListChecks, end: false },
-    { to: '/more', label: 'เพิ่มเติม', Icon: LayoutGrid, end: false },
   ]
+
+  // เกษตรกรและปศุสัตว์ มีหน้า "บันทึก" สำหรับกรอกกิจกรรมภาคสนาม
+  if (role === 'farmer' || role === 'husbandry') {
+    tabs.push({ to: '/record', label: 'บันทึก', Icon: ClipboardPlus, end: false })
+  }
+
+  // ทุกบทบาทเห็นหน้า "งาน" (Task Center) เพื่อติดตามงาน
+  tabs.push({ to: '/tasks', label: 'งาน', Icon: ListChecks, end: false })
+
+  tabs.push({ to: '/more', label: 'เพิ่มเติม', Icon: LayoutGrid, end: false })
+
+  if (role === 'coop') {
+    // แทรกเมนู "นำเข้า" ให้สหกรณ์
+    tabs.splice(2, 0, { to: '/import', label: 'นำเข้า', Icon: Download, end: false })
+  }
+
+  return tabs
 }
 
 interface InstallPromptEvent extends Event {

@@ -190,6 +190,7 @@ export async function computeKpis(): Promise<Kpi[]> {
 export interface AnimalFilter {
   q?: string
   farmId?: string
+  farmIds?: string[]
   stage?: Animal['stage'] | 'all'
   /** จำนวนครั้งที่ท้อง ใช้กรองโคสาวตามสถานะการท้อง */
   parity?: number
@@ -197,13 +198,27 @@ export interface AnimalFilter {
 }
 
 export async function searchAnimals(f: AnimalFilter): Promise<Animal[]> {
-  let coll = db.animals.toCollection()
-  if (f.farmId) coll = db.animals.where('farmId').equals(f.farmId)
-  else if (f.stage && f.stage !== 'all') coll = db.animals.where('stage').equals(f.stage)
+  let rows: Animal[] = []
 
-  let rows = await coll.limit(f.farmId || f.stage ? 5000 : 5000).toArray()
-  if (f.stage && f.stage !== 'all') rows = rows.filter((a) => a.stage === f.stage)
-  if (f.parity !== undefined) rows = rows.filter((a) => a.parity === f.parity)
+  // บังคับกรองตามฟาร์มก่อนเสมอ ถ้ามีการระบุ farmId หรือ farmIds
+  if (f.farmId) {
+    rows = await db.animals.where('farmId').equals(f.farmId).toArray()
+  } else if (f.farmIds && f.farmIds.length > 0) {
+    rows = await db.animals.where('farmId').anyOf(f.farmIds).toArray()
+  } else {
+    // ถ้าไม่ระบุฟาร์มเลย (เช่น Admin ดูทั้งหมด) ให้ดึงทั้งหมดมาแล้วกรองต่อ
+    rows = await db.animals.toArray()
+  }
+
+  // กรองสถานะ (Stage) - ต้องทำหลังจากได้ชุดข้อมูลฟาร์มแล้วเพื่อไม่ให้วัวฟาร์มอื่นหลุดเข้ามา
+  if (f.stage && f.stage !== 'all') {
+    rows = rows.filter((a) => a.stage === f.stage)
+  }
+
+  if (f.parity !== undefined) {
+    rows = rows.filter((a) => a.parity === f.parity)
+  }
+
   if (f.q) {
     const q = f.q.trim().toLowerCase()
     rows = rows.filter(

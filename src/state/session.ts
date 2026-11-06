@@ -104,7 +104,7 @@ export const useSession = create<SessionState>((set) => ({
         phone: demo.phone,
         readOnly: demo.readOnly,
         isAdmin: demo.isAdmin,
-        farmIds: [],
+        farmIds: demo.role === 'farmer' ? ['farm_001', 'farm_002', 'farm_003'] : [],
         active: true,
         token: '',
       }
