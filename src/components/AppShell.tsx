@@ -6,7 +6,6 @@ import {
   Bell,
   CircleAlert,
   CircleCheck,
-  ClipboardList,
   ClipboardPlus,
   Download,
   Home,

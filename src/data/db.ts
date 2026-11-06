@@ -113,7 +113,7 @@ export async function seedDemoData() {
 
   await db.farms.bulkPut(demoFarms);
 
-  const demoAnimals = [
+  const demoAnimals: Animal[] = [
     { id: 'a1', rfid: '123', tagNo: 'S01-01', name: 'เบอร์ 1', sex: 'female', breed: 'โฮลสไตน์', bloodPct: 100, birthDate: Date.now() - 1000 * 60 * 60 * 24 * 365 * 2, farmId: 'farm_001', damId: null, sireCode: 'S-01', stage: 'pregnant', parity: 1, lastCalvingAt: null, lastHeatAt: null, lastBredAt: null, expectedCalvingAt: Date.now() + 1000 * 60 * 60 * 24 * 30, lastBcs: 3.2, feedGroupId: null, withdrawalUntil: null, active: true },
     { id: 'a2', rfid: '456', tagNo: 'S02-01', name: 'เบอร์ 2', sex: 'female', breed: 'โฮลสไตน์', bloodPct: 100, birthDate: Date.now() - 1000 * 60 * 60 * 24 * 365 * 3, farmId: 'farm_002', damId: null, sireCode: 'S-01', stage: 'waiting', parity: 2, lastCalvingAt: Date.now() - 1000 * 60 * 60 * 24 * 60, lastHeatAt: Date.now() - 1000 * 60 * 60 * 24 * 5, lastBredAt: null, expectedCalvingAt: null, lastBcs: 3.0, feedGroupId: null, withdrawalUntil: null, active: true },
     { id: 'a3', rfid: '789', tagNo: 'S03-01', name: 'เบอร์ 3', sex: 'female', breed: 'โฮลสไตน์', bloodPct: 100, birthDate: Date.now() - 1000 * 60 * 60 * 24 * 365 * 1, farmId: 'farm_003', damId: null, sireCode: 'S-01', stage: 'heifer', parity: 0, lastCalvingAt: null, lastHeatAt: null, lastBredAt: null, expectedCalvingAt: null, lastBcs: 2.8, feedGroupId: null, withdrawalUntil: null, active: true },
