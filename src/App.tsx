@@ -6,13 +6,11 @@ import { Animals } from './routes/Animals'
 import { AnimalDetail } from './routes/AnimalDetail'
 import { AnimalNew } from './routes/AnimalNew'
 import { RecordCatalog, RecordForm } from './routes/Record'
-import { Tasks } from './routes/Tasks'
 import { More } from './routes/More'
 import { Alerts } from './routes/Alerts'
 import { Inventory } from './routes/Inventory'
 import { SyncCenter } from './routes/SyncCenter'
 import { Settings } from './routes/Settings'
-import { Assign } from './routes/Assign'
 import { Login } from './routes/Login'
 import { NotFound } from './routes/NotFound'
 import { HerdImport } from './components/HerdImport'
@@ -142,6 +140,14 @@ export default function App() {
                 title="รายงานและตัวชี้วัด"
                 why="รายงานคือกิจกรรม ค-06 ซึ่งยกไปเฟสถัดไปพร้อมภาคอื่น ตัวเลขสรุปเท่าที่ภาค ก ต้องใช้อยู่บนหน้าหลักแล้ว"
               />
+            }
+          />
+          <Route
+            path="import"
+            element={
+              <Require roles={['coop']}>
+                <HerdImport />
+              </Require>
             }
           />
           <Route path="sync" element={<SyncCenter />} />
