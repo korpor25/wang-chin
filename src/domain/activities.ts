@@ -214,7 +214,7 @@ export const ACTIVITIES: ActivitySpec[] = [
     code: 'ก-05',
     name: 'ตรวจความพร้อมก่อนเข้าโปรแกรมผสม',
     group: 'field',
-    actors: ['husbandry'],
+    actors: ['husbandry', 'farmer'],
     trigger: 'สิ้นสุดระยะพักหลังคลอดตามค่าพารามิเตอร์',
     detail: 'ตรวจรังไข่สองข้างและสภาพมดลูก แล้วตัดสินว่าเข้าโปรแกรมได้เลยหรือต้องฟื้นฟูก่อน',
     needsAnimal: true,
