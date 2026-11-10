@@ -9,9 +9,9 @@
  *   - ตัวนับรายการค้างเก็บแยก ไม่ count() สด (ผลวัดจริง: 500k แถว = 5.1 วินาที)
  *   - ข้อมูลบนเครื่องไม่ใช่สำเนาเดียว จึงลบของเก่าที่ซิงค์แล้วออกตามนโยบาย
  */
-import { bumpCounter, db, getSetting, newLocalId, setSetting } from './db'
+import { bumpCounter, db, getSetting, newLocalId, setSetting } from './db.ts'
 import type { ActivityRecord, OutboxItem, SyncStatus } from '../domain/types'
-import { forceSignOut, useSession } from '../state/session'
+import { forceSignOut, useSession } from '../state/session.ts'
 
 const DAY = 86_400_000
 
@@ -94,7 +94,7 @@ function backoffMs(attempts: number) {
 }
 
 /** ปลายทางจริง ตั้งผ่าน VITE_API_URL — ไม่ตั้งไว้ = ใช้ตัวจำลองสำหรับเดโมและทดสอบ UX */
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+const API_URL = (import.meta.env?.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 
 /** ตัวข้อมูลจริงที่ต้องส่งไปกับรายการในคิว */
 async function payloadFor(item: OutboxItem): Promise<unknown> {
@@ -115,7 +115,7 @@ async function payloadFor(item: OutboxItem): Promise<unknown> {
  * ถ้าไม่ตั้งค่าไว้ จะจำลองผลลัพธ์ตามสัดส่วนที่ใกล้เคียงงานภาคสนามเหมือนเดิม
  */
 async function pushOne(item: OutboxItem, token: string | null): Promise<'ok' | 'conflict' | 'error'> {
-  if (!API_URL) {
+  if (!API_URL || useSession.getState().account?.demo) {
     // หน่วงตามขนาดข้อมูลเล็กน้อย ให้ใกล้เคียงการส่งจริงบนเน็ตมือถือ
     await new Promise((r) => setTimeout(r, 60 + Math.min(400, item.bytes / 2000) + Math.random() * 120))
     const roll = Math.random()
@@ -350,6 +350,103 @@ async function markPhoto(localId: string, status: SyncStatus) {
   await db.photos.update(photo.id, { syncStatus: status })
 }
 
+async function updateCounter(key: string, delta: number) {
+  const row = await db.counters.get(key)
+  await db.counters.put({ key, value: Math.max(0, (row?.value ?? 0) + delta) })
+}
+
+/** จำนวนคิวจากรุ่นเก่าที่ยังไม่มีเจ้าของ — คิวที่ตั้งใจให้เป็น null จะไม่นับรวม */
+export async function countLegacyOutbox(): Promise<number> {
+  return db.outbox.filter((item) => item.ownerUserId === undefined).count()
+}
+
+/** ผูกคิวเก่ากับบัญชีที่ผู้ใช้เลือกเอง */
+export async function claimLegacyOutbox(userId: string): Promise<number> {
+  if (!userId) return 0
+  return db.transaction('rw', db.outbox, async () =>
+    db.outbox.filter((item) => item.ownerUserId === undefined).modify({ ownerUserId: userId }),
+  )
+}
+
+/**
+ * ลบเฉพาะคิวเก่าที่ไม่มีเจ้าของ โดยเก็บข้อมูลในเครื่องและทำเครื่องหมายรายการที่เกี่ยวข้อง
+ * ว่าไม่ซิงค์สำเร็จ เพื่อไม่ให้การทิ้งคิวดูเหมือนข้อมูลขึ้นเซิร์ฟเวอร์แล้ว
+ */
+export async function discardLegacyOutbox(): Promise<number> {
+  return db.transaction('rw', db.outbox, db.records, db.photos, db.counters, async () => {
+    const items = await db.outbox.filter((item) => item.ownerUserId === undefined).toArray()
+    if (items.length === 0) return 0
+
+    const recordIds = new Set(items.filter((item) => item.table === 'records').map((item) => item.refLocalId))
+    const photoIds = new Set(items.filter((item) => item.table === 'photos').map((item) => item.refLocalId))
+    let pendingRecords = 0
+    let failedRecords = 0
+    let pendingPhotos = 0
+
+    for (const localId of recordIds) {
+      const record = await db.records.where('localId').equals(localId).first()
+      if (record?.id && record.syncStatus === 'pending') {
+        await db.records.update(record.id, { syncStatus: 'failed' })
+        pendingRecords++
+        failedRecords++
+      }
+    }
+
+    for (const localId of photoIds) {
+      const photo = await db.photos.where('localId').equals(localId).first()
+      if (photo?.id && photo.syncStatus === 'pending') {
+        await db.photos.update(photo.id, { syncStatus: 'failed' })
+        pendingPhotos++
+      }
+    }
+
+    await db.outbox.bulkDelete(items.flatMap((item) => item.id === undefined ? [] : [item.id]))
+    await updateCounter('outbox.size', -items.length)
+    if (pendingRecords) {
+      await updateCounter('records.pending', -pendingRecords)
+      await updateCounter('records.failed', failedRecords)
+    }
+    if (pendingPhotos) await updateCounter('photos.pending', -pendingPhotos)
+    return items.length
+  })
+}
+
+/** แก้คิวขัดแย้งที่ไม่ใช่บันทึกกิจกรรม (เช่น งาน/รูป) โดยไม่ทิ้งข้อมูลในเครื่อง */
+export async function resolveQueueConflict(
+  outboxId: number,
+  choice: 'retry' | 'discard',
+): Promise<boolean> {
+  return db.transaction('rw', db.outbox, db.photos, db.counters, async () => {
+    const item = await db.outbox.get(outboxId)
+    if (!item || item.status !== 'conflict' || item.table === 'records') return false
+
+    if (choice === 'retry') {
+      await db.outbox.update(outboxId, {
+        status: undefined,
+        attempts: 0,
+        nextAttemptAt: Date.now(),
+        lastError: null,
+      })
+      if (item.table === 'photos') {
+        const photo = await db.photos.where('localId').equals(item.refLocalId).first()
+        if (photo?.id) {
+          if (photo.syncStatus === 'conflict') await updateCounter('photos.pending', 1)
+          await db.photos.update(photo.id, { syncStatus: 'pending' })
+        }
+      }
+      return true
+    }
+
+    await db.outbox.delete(outboxId)
+    await updateCounter('outbox.size', -1)
+    if (item.table === 'photos') {
+      const photo = await db.photos.where('localId').equals(item.refLocalId).first()
+      if (photo?.id) await db.photos.update(photo.id, { syncStatus: 'failed' })
+    }
+    return true
+  })
+}
+
 // ── ความขัดแย้ง ──────────────────────────────────────────────────────────
 
 export type ConflictChoice = 'keep-local' | 'take-server'
@@ -425,6 +522,7 @@ export interface SyncSnapshot {
   conflict: number
   outbox: number
   blockedOutbox: number
+  legacyOutbox: number
   oldestPendingAt: number | null
   lastSyncAt: number | null
   online: boolean
@@ -451,6 +549,7 @@ export async function syncSnapshot(): Promise<SyncSnapshot> {
       owned.filter((item) => item.status === 'conflict').length,
     outbox: owned.filter((item) => item.status !== 'conflict').length,
     blockedOutbox: items.filter((item) => !userId || item.ownerUserId !== userId).length,
+    legacyOutbox: items.filter((item) => item.ownerUserId === undefined).length,
     oldestPendingAt: oldest?.createdAt ?? null,
     lastSyncAt,
     online: navigator.onLine,

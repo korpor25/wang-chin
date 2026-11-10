@@ -45,6 +45,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.0
         version: 6.1.1(vite@8.2.2(@types/node@24.13.3)(terser@5.51.2))
+      fake-indexeddb:
+        specifier: ^6.2.8
+        version: 6.2.8
       oxlint:
         specifier: ^1.79.0
         version: 1.80.0
@@ -2185,7 +2188,12 @@ packages:
       use-sync-external-store:
         optional: true
 
+  fake-indexeddb@6.2.8:
+    resolution: {integrity: sha512-mpVW/HLUqwKXJ6F/s0hMgdK1eQfM4ncTHDioNGHWL0WKV3VcZCoZq1NKgboBbAge07aRCO7L48yziKssL59XEQ==}
+    engines: {node: '>=18'}
+
 snapshots:
+  fake-indexeddb@6.2.8: {}
 
   '@apideck/better-ajv-errors@0.3.7(ajv@8.20.0)':
     dependencies:

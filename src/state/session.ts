@@ -4,8 +4,10 @@ import type { Role } from '../domain/types'
 
 const KEY = 'wangchin.session'
 
-/** ปลายทาง API เดียวกับที่ตัวซิงค์ใช้ — ไม่ตั้ง VITE_API_URL = โหมดเดโมออฟไลน์ (ไม่มีโทเคน) */
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+/** ปลายทาง API เดียวกับที่ตัวซิงค์ใช้ */
+const IS_DEV = import.meta.env?.DEV ?? false
+const API_URL = (import.meta.env?.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+const PUBLIC_PRESENTATION_LOGIN = import.meta.env?.VITE_PUBLIC_PRESENTATION_LOGIN === 'true'
 
 export interface Account {
   userId: string
@@ -19,13 +21,14 @@ export interface Account {
   /** ฟาร์มที่ผูกกับบัญชี (เกษตรกรเห็นเฉพาะของตัวเอง — SEC-01) */
   farmIds: string[]
   active: boolean
-  /** JWT จาก backend — แนบไปกับทุกคำขอที่ต้องยืนยันตัวตน (ว่าง = โหมดเดโมออฟไลน์) */
+  /** JWT จาก backend — แนบไปกับทุกคำขอที่ต้องยืนยันตัวตน */
   token: string
+  /** บัญชีเดโมในเครื่อง ไม่ส่งคำขอที่ต้องยืนยันตัวตนไป backend */
+  demo?: boolean
 }
 
 /**
- * บัญชีเดโมสำหรับกดเข้าใช้เร็วในเครื่องทดสอบ (รหัส dev ทุกบัญชี = 123456)
- * โหมดจริง: ปุ่มจะเติมเบอร์+รหัสให้แล้วยิง /auth/login · โหมดออฟไลน์: เข้าใช้ในเครื่องเลย
+ * บัญชีนำเสนอที่ใช้รหัสร่วมกัน — เมื่อเปิดบน production ทุกคนจะเห็นข้อมูลรับรองนี้
  */
 export interface DemoAccount {
   name: string
@@ -36,9 +39,10 @@ export interface DemoAccount {
   password: string
 }
 
-export const DEMO_LOGIN_ENABLED = import.meta.env.DEV && !API_URL
+export const DEMO_LOGIN_ENABLED = IS_DEV || (Boolean(API_URL) && PUBLIC_PRESENTATION_LOGIN)
+export const DEMO_LOGIN_USES_API = Boolean(API_URL)
 
-export const DEMO_ACCOUNTS: DemoAccount[] = import.meta.env.DEV ? [
+export const DEMO_ACCOUNTS: DemoAccount[] = DEMO_LOGIN_ENABLED ? [
   { name: 'อนุชา วงศ์ใหญ่', role: 'husbandry', phone: '0810000002', readOnly: false, isAdmin: false, password: '123456' },
   { name: 'สมชาย ใจดี', role: 'farmer', phone: '0810000001', readOnly: false, isAdmin: false, password: '123456' },
   { name: 'วิไล ศรีบุญเรือง', role: 'coop', phone: '0810000003', readOnly: false, isAdmin: true, password: '123456' },
@@ -67,11 +71,13 @@ interface SessionState {
   error: string | null
   /** เข้าสู่ระบบด้วยเบอร์โทร+รหัสผ่าน คืน true เมื่อสำเร็จ */
   signIn: (phone: string, password: string) => Promise<boolean>
+  /** เข้าใช้บัญชีเดโมในเครื่องพัฒนา โดยไม่เรียก backend */
+  signInDemo: (phone: string, password: string) => Promise<boolean>
   signOut: () => void
   restore: () => void
 }
 
-export const useSession = create<SessionState>((set) => ({
+export const useSession = create<SessionState>((set, get) => ({
   account: null,
   ready: false,
   loading: false,
@@ -90,35 +96,15 @@ export const useSession = create<SessionState>((set) => ({
 
   async signIn(phone, password) {
     const digits = onlyDigits(phone)
-    set({ loading: true, error: null })
-
-    // โหมดเดโมออฟไลน์ — ไม่มี backend ให้ยืนยันตัวตนในเครื่องจากบัญชีเดโม
     if (!API_URL) {
-      if (!import.meta.env.DEV) {
+      if (!IS_DEV) {
         set({ loading: false, error: 'ระบบเข้าสู่ระบบยังไม่ได้ตั้งค่า ติดต่อผู้ดูแลระบบ' })
         return false
       }
-      const demo = DEMO_ACCOUNTS.find((a) => a.phone === digits)
-      if (!demo || password !== demo.password) {
-        set({ loading: false, error: 'เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง' })
-        return false
-      }
-      const account: Account = {
-        userId: `demo_${demo.phone}`,
-        name: demo.name,
-        role: demo.role,
-        phone: demo.phone,
-        readOnly: demo.readOnly,
-        isAdmin: demo.isAdmin,
-        farmIds: demo.role === 'farmer' ? ['farm_001', 'farm_002', 'farm_003'] : [],
-        active: true,
-        token: '',
-      }
-      persist(account)
-      resetToHome()
-      set({ account, loading: false, error: null })
-      return true
+      return get().signInDemo(digits, password)
     }
+
+    set({ loading: true, error: null })
 
     // โหมดจริง — ยืนยันตัวตนที่เซิร์ฟเวอร์แล้วรับ JWT
     try {
@@ -154,6 +140,38 @@ export const useSession = create<SessionState>((set) => ({
       set({ loading: false, error: 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบว่า API ทำงานอยู่' })
       return false
     }
+  },
+
+  async signInDemo(phone, password) {
+    set({ loading: true, error: null })
+    if (!IS_DEV) {
+      set({ loading: false, error: 'บัญชีเดโมใช้ได้เฉพาะโหมดพัฒนา' })
+      return false
+    }
+
+    const digits = onlyDigits(phone)
+    const demo = DEMO_ACCOUNTS.find((a) => a.phone === digits)
+    if (!demo || password !== demo.password) {
+      set({ loading: false, error: 'เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง' })
+      return false
+    }
+
+    const account: Account = {
+      userId: `demo_${demo.phone}`,
+      name: demo.name,
+      role: demo.role,
+      phone: demo.phone,
+      readOnly: demo.readOnly,
+      isAdmin: demo.isAdmin,
+      farmIds: demo.role === 'farmer' ? ['farm_1'] : [],
+      active: true,
+      token: '',
+      demo: true,
+    }
+    persist(account)
+    resetToHome()
+    set({ account, loading: false, error: null })
+    return true
   },
 
   signOut() {

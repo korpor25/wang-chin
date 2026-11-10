@@ -9,10 +9,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { CloudOff, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
 import { Card, Empty, Field, KeyValues, List, Note, PageHeader, Pill, Skeleton, Stat, Stats } from '../components/ui'
 import { db, rebuildCounters } from '../data/db'
+import { toast } from '../components/Toast'
 import {
+  claimLegacyOutbox,
+  countLegacyOutbox,
+  discardLegacyOutbox,
   getRetention,
   pruneOldData,
   resolveConflict,
+  resolveQueueConflict,
   runSync,
   setRetention,
   syncSnapshot,
@@ -36,12 +41,13 @@ export function SyncCenter() {
   const [busy, setBusy] = useState(false)
   const [last, setLast] = useState<SyncOutcome | null>(null)
   const [pruned, setPruned] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [s, q, c, p, e] = await Promise.all([
       syncSnapshot(),
       db.outbox.orderBy('nextAttemptAt').toArray().then((items) =>
-        items.filter((item) => item.ownerUserId === userId).slice(0, 50),
+        items.filter((item) => item.ownerUserId === userId || item.ownerUserId === undefined).slice(0, 50),
       ),
       db.records.where('syncStatus').equals('conflict').limit(30).toArray(),
       getRetention(),
@@ -82,6 +88,57 @@ export function SyncCenter() {
     setBusy(false)
   }
 
+  async function manageLegacyQueue(action: 'claim' | 'discard') {
+    if (busy) return
+    setBusy(true)
+    setActionError(null)
+    try {
+      const count = await countLegacyOutbox()
+      if (count === 0) {
+        await load()
+        return
+      }
+      if (action === 'claim') {
+        if (!userId || !window.confirm(
+          `ผูกคิวเก่า ${num(count)} รายการกับบัญชีที่กำลังใช้อยู่ แล้วส่งในชื่อบัญชีนี้หรือไม่?`,
+        )) return
+        const claimed = await claimLegacyOutbox(userId)
+        toast.ok(`ผูกคิวเก่า ${num(claimed)} รายการกับบัญชีนี้แล้ว`)
+      } else {
+        if (!window.confirm(
+          `ลบคิวเก่า ${num(count)} รายการหรือไม่? ข้อมูลงาน/รูปในเครื่องจะยังอยู่ แต่จะไม่ถูกส่ง`,
+        )) return
+        const discarded = await discardLegacyOutbox()
+        toast.info(`ลบคิวเก่า ${num(discarded)} รายการแล้ว โดยเก็บข้อมูลในเครื่องไว้`)
+      }
+      await load()
+    } catch (error) {
+      setActionError(`จัดการคิวเก่าไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function resolveQueueItem(q: OutboxItem, choice: 'retry' | 'discard') {
+    if (busy || q.id === undefined) return
+    if (choice === 'discard' && !window.confirm(
+      'ลบคิวส่งนี้หรือไม่? ข้อมูลในเครื่องจะยังอยู่และจะไม่ถูกส่งขึ้นเซิร์ฟเวอร์',
+    )) return
+    setBusy(true)
+    setActionError(null)
+    try {
+      const resolved = await resolveQueueConflict(q.id, choice)
+      if (resolved) {
+        toast.info(choice === 'retry' ? 'นำคิวกลับไปรอส่งแล้ว' : 'ลบคิวแล้ว โดยเก็บข้อมูลในเครื่องไว้')
+      }
+      await load()
+    } catch (error) {
+      setActionError(`จัดการคิวขัดแย้งไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (!snap || !policy) return <Skeleton rows={5} />
 
   const totalPending = snap.pending + snap.failed + snap.conflict
@@ -110,11 +167,35 @@ export function SyncCenter() {
             <CloudOff size={14} className="ic-inline" /> ออฟไลน์อยู่ — บันทึกต่อได้ตามปกติ
           </Note>
         )}
-        {snap.blockedOutbox > 0 && (
+        {snap.blockedOutbox > snap.legacyOutbox && (
           <Note>
-            มีคิว {num(snap.blockedOutbox)} รายการที่ผูกกับบัญชีอื่นหรือเป็นคิวเก่าที่ยังไม่ระบุเจ้าของ
+            มีคิว {num(snap.blockedOutbox - snap.legacyOutbox)} รายการที่ผูกกับบัญชีอื่นหรือไม่ได้กำหนดเจ้าของไว้
             จึงพักไว้และจะไม่ส่งด้วยบัญชีนี้
           </Note>
+        )}
+        {snap.legacyOutbox > 0 && (
+          <div className="advice warn">
+            <div>
+              <b>พบคิวเก่าที่ยังไม่มีเจ้าของ</b>
+              มี {num(snap.legacyOutbox)} รายการ — เลือกผูกกับบัญชีนี้ หรือทิ้งเฉพาะคิวโดยเก็บข้อมูลในเครื่องไว้
+              <div className="row snug">
+                <button
+                  className="btn ghost"
+                  disabled={busy || !userId}
+                  onClick={() => void manageLegacyQueue('claim')}
+                >
+                  ผูกกับบัญชีนี้
+                </button>
+                <button
+                  className="btn ghost"
+                  disabled={busy}
+                  onClick={() => void manageLegacyQueue('discard')}
+                >
+                  ทิ้งคิวเก่า
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* OFF-07 — เตือนสองเกณฑ์: ค้างมากเกินไป และค้างนานเกินไป */}
@@ -157,6 +238,7 @@ export function SyncCenter() {
             {last.stoppedBecauseOffline && ' · หยุดกลางคันเพราะขาดสัญญาณ'}
           </Note>
         )}
+        {actionError && <Note>{actionError}</Note>}
       </Card>
 
       {conflicts.length > 0 && (
@@ -210,6 +292,7 @@ export function SyncCenter() {
                   <th>ลองแล้ว</th>
                   <th>ลองใหม่</th>
                   <th>ข้อผิดพลาด</th>
+                  <th>การจัดการ</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,6 +301,7 @@ export function SyncCenter() {
                     <td>
                       {q.op} · {q.table}
                       {q.status === 'conflict' && <Pill tone="crit">ขัดแย้ง · พักส่ง</Pill>}
+                      {q.ownerUserId === undefined && <Pill tone="warn">คิวเก่า · ไม่มีเจ้าของ</Pill>}
                     </td>
                     <td className="num">{bytes(q.bytes)}</td>
                     <td className="num">{q.attempts}</td>
@@ -227,6 +311,26 @@ export function SyncCenter() {
                         : 'พร้อมส่ง'}
                     </td>
                     <td>{q.lastError ?? '—'}</td>
+                    <td>
+                      {q.status === 'conflict' ? (
+                        <div className="row snug">
+                          <button
+                            className="btn ghost"
+                            disabled={busy}
+                            onClick={() => void resolveQueueItem(q, 'retry')}
+                          >
+                            ส่งอีกครั้ง
+                          </button>
+                          <button
+                            className="btn ghost"
+                            disabled={busy}
+                            onClick={() => void resolveQueueItem(q, 'discard')}
+                          >
+                            ทิ้งคิว
+                          </button>
+                        </div>
+                      ) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

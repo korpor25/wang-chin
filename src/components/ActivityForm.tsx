@@ -686,7 +686,7 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
   const [recent, setRecent] = useState<Animal[]>([])
   const [focused, setFocused] = useState(false)
   // เกษตรกรเลือกได้เฉพาะโคในฟาร์มตัวเอง
-  const scope = role === 'farmer' ? (farmIds ?? []) : undefined
+  const scope = useMemo(() => role === 'farmer' ? (farmIds ?? []) : undefined, [role, farmIds])
 
   useEffect(() => {
     if (!open) return

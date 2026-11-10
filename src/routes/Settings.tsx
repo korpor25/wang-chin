@@ -51,17 +51,23 @@ export function Settings() {
   const [saved, setSaved] = useState(false)
   const [audit, setAudit] = useState<AuditEntry[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
+  const [resetPending, setResetPending] = useState<{ queued: number; records: number } | null>(null)
+  const [resetError, setResetError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     void getParams().then(setParams)
     void db.audit.orderBy('at').reverse().limit(50).toArray().then(setAudit)
     void (async () => {
-      const [farms, animals, records, tasks, alerts, photos] = await Promise.all([
+      setResetPending(null)
+      const [farms, animals, records, tasks, alerts, photos, queued, pendingRecords] = await Promise.all([
         db.farms.count(), db.animals.count(), db.records.count(),
         db.tasks.count(), db.alerts.count(), db.photos.count(),
+        db.outbox.count(),
+        db.records.where('syncStatus').anyOf('pending', 'failed', 'conflict').count(),
       ])
       setCounts({ farms, animals, records, tasks, alerts, photos })
+      setResetPending({ queued, records: pendingRecords })
     })()
     void isPersisted().then(setPersisted)
     void estimate().then(setSpace)
@@ -81,6 +87,27 @@ export function Settings() {
     })
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
+  }
+
+  async function resetLocalData() {
+    if (busy) return
+    setBusy(true)
+    setResetError(null)
+    try {
+      const [queued, records] = await Promise.all([
+        db.outbox.count(),
+        db.records.where('syncStatus').anyOf('pending', 'failed', 'conflict').count(),
+      ])
+      setResetPending({ queued, records })
+      if (queued + records > 0) return
+      if (!window.confirm('ต้องการรีเซ็ตข้อมูลในเครื่องหรือไม่?')) return
+      await seedIfEmpty(true)
+      location.reload()
+    } catch (error) {
+      setResetError(`รีเซ็ตไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (!params) return <Skeleton rows={5} />
@@ -177,18 +204,21 @@ export function Settings() {
           <div className="row">
             <button
               className="btn ghost"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true)
-                await seedIfEmpty(true)
-                setBusy(false)
-                location.reload()
-              }}
+              disabled={busy || resetPending === null || resetPending.queued + resetPending.records > 0}
+              onClick={() => void resetLocalData()}
             >
               รีเซ็ตข้อมูลในเครื่อง
             </button>
           </div>
-          <Note>ลบข้อมูลทั้งหมดบนเครื่องนี้ รวมบันทึกที่ยังไม่ได้ส่ง</Note>
+          {resetPending && resetPending.queued + resetPending.records > 0 ? (
+            <Note>
+              ส่งหรือแก้ไขข้อมูลที่ค้างก่อนจึงจะรีเซ็ตได้ · คิว {num(resetPending.queued)} รายการ /
+              บันทึกที่รอส่ง ล้มเหลว หรือขัดแย้ง {num(resetPending.records)} รายการ
+            </Note>
+          ) : (
+            <Note>ลบข้อมูลทั้งหมดบนเครื่องนี้ รวมบันทึกที่ซิงค์แล้ว</Note>
+          )}
+          {resetError && <Note>{resetError}</Note>}
         </Card>
       )}
     </>
