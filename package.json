@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --experimental-strip-types --test",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit"
   },

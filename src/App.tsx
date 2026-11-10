@@ -114,6 +114,14 @@ export default function App() {
               </Require>
             }
           />
+          <Route
+            path="assign"
+            element={
+              <Require roles={['coop']}>
+                <TaskCenter initialTab="assign" />
+              </Require>
+            }
+          />
           <Route path="more" element={<More />} />
           <Route path="alerts" element={<Alerts />} />
           <Route

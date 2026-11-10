@@ -36,12 +36,14 @@ export interface DemoAccount {
   password: string
 }
 
-export const DEMO_ACCOUNTS: DemoAccount[] = [
+export const DEMO_LOGIN_ENABLED = import.meta.env.DEV && !API_URL
+
+export const DEMO_ACCOUNTS: DemoAccount[] = import.meta.env.DEV ? [
   { name: 'อนุชา วงศ์ใหญ่', role: 'husbandry', phone: '0810000002', readOnly: false, isAdmin: false, password: '123456' },
   { name: 'สมชาย ใจดี', role: 'farmer', phone: '0810000001', readOnly: false, isAdmin: false, password: '123456' },
   { name: 'วิไล ศรีบุญเรือง', role: 'coop', phone: '0810000003', readOnly: false, isAdmin: true, password: '123456' },
   { name: 'ประสิทธิ์ คำมูล', role: 'coop', phone: '0810000004', readOnly: true, isAdmin: false, password: '123456' },
-]
+] : []
 
 /**
  * พากลับไปตั้งต้นที่หน้าแรกก่อนสลับบัญชี
@@ -92,6 +94,10 @@ export const useSession = create<SessionState>((set) => ({
 
     // โหมดเดโมออฟไลน์ — ไม่มี backend ให้ยืนยันตัวตนในเครื่องจากบัญชีเดโม
     if (!API_URL) {
+      if (!import.meta.env.DEV) {
+        set({ loading: false, error: 'ระบบเข้าสู่ระบบยังไม่ได้ตั้งค่า ติดต่อผู้ดูแลระบบ' })
+        return false
+      }
       const demo = DEMO_ACCOUNTS.find((a) => a.phone === digits)
       if (!demo || password !== demo.password) {
         set({ loading: false, error: 'เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง' })

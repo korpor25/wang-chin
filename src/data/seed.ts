@@ -99,9 +99,43 @@ export async function renameLegacyLabels() {
   })
 }
 
+async function removeLegacyPartialDemoData(): Promise<boolean> {
+  const [farms, animals, userCount] = await Promise.all([
+    db.farms.toArray(),
+    db.animals.toArray(),
+    db.users.count(),
+  ])
+  const legacyFarms = new Map([
+    ['farm_001', 'F01'],
+    ['farm_002', 'F02'],
+    ['farm_003', 'F03'],
+    ['farm_004', 'F04'],
+  ])
+  const legacyAnimals = new Map([
+    ['a1', 'S01-01'],
+    ['a2', 'S02-01'],
+    ['a3', 'S03-01'],
+  ])
+
+  if (
+    farms.length === 0 ||
+    userCount > 0 ||
+    farms.some((farm) => legacyFarms.get(farm.id) !== farm.code) ||
+    animals.some((animal) => legacyAnimals.get(animal.id) !== animal.tagNo)
+  ) {
+    return false
+  }
+
+  await db.transaction('rw', db.farms, db.animals, async () => {
+    await db.farms.bulkDelete(farms.map((farm) => farm.id))
+    await db.animals.bulkDelete(animals.map((animal) => animal.id))
+  })
+  return true
+}
+
 async function seed(force = false) {
   const count = await db.farms.count()
-  if (count > 0 && !force) return false
+  if (count > 0 && !force && !(await removeLegacyPartialDemoData())) return false
   if (force) {
     await Promise.all([
       db.farms.clear(), db.animals.clear(), db.users.clear(), db.semen.clear(),
@@ -354,4 +388,3 @@ async function seed(force = false) {
   await bumpCounter('seed.version', 1)
   return true
 }
-

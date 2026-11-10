@@ -269,6 +269,10 @@ export interface Alert {
 export interface OutboxItem {
   id?: number
   localId: string
+  /** Account that created this queued write; missing on items from older app versions. */
+  ownerUserId?: string | null
+  /** Conflicts that cannot be resolved automatically remain queued and paused. */
+  status?: 'conflict'
   table: 'records' | 'photos' | 'tasks' | 'animals' | 'farms'
   op: 'create' | 'update' | 'delete'
   refLocalId: string

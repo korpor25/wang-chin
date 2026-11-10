@@ -20,7 +20,7 @@ const OPTIONS: Array<{ value: Bucket; label: string }> = [
 ]
 
 export function Tasks() {
-  const { userId, role, isAdmin } = useAccount()
+  const { userId, role, isAdmin, farmIds: accountFarmIds } = useAccount()
   const [bucket, setBucket] = useState<Bucket>('today')
   const [data, setData] = useState<Awaited<ReturnType<typeof taskBuckets>> | null>(null)
   const [doneRows, setDoneRows] = useState<Task[]>([])
@@ -28,7 +28,7 @@ export function Tasks() {
   useEffect(() => {
     let alive = true
     void (async () => {
-      const farmIds = role === 'farmer' ? ((await db.users.get(userId))?.farmIds ?? []) : undefined
+      const farmIds = role === 'farmer' ? (accountFarmIds ?? []) : undefined
       const [b, d] = await Promise.all([
         taskBuckets(role, farmIds, isAdmin, userId),
         db.tasks.where('status').equals('done').reverse().limit(200).toArray(),
@@ -36,13 +36,23 @@ export function Tasks() {
       if (!alive) return
       setData(b)
       setDoneRows(
-        d.filter((k) => inPhase(k.activityCode)).sort((x, y) => (y.doneAt ?? 0) - (x.doneAt ?? 0)).slice(0, 50),
+        d
+          .filter((k) =>
+            inPhase(k.activityCode) &&
+            (role !== 'farmer' ||
+              (!!k.farmId &&
+                (accountFarmIds ?? []).includes(k.farmId) &&
+                k.assignedRole === role &&
+                (!k.assignedTo || k.assignedTo === userId))),
+          )
+          .sort((x, y) => (y.doneAt ?? 0) - (x.doneAt ?? 0))
+          .slice(0, 50),
       )
     })()
     return () => {
       alive = false
     }
-  }, [userId, role, isAdmin, bucket])
+  }, [userId, role, isAdmin, accountFarmIds, bucket])
 
   if (!data) return <Skeleton rows={5} />
 

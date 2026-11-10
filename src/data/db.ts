@@ -97,32 +97,6 @@ class WangchinDb extends Dexie {
 
 export const db = new WangchinDb()
 
-/**
- * สร้างข้อมูลเดโมพื้นฐานเพื่อให้ทดสอบระบบได้ทันที (โหมดเดโม)
- * จะทำงานเฉพาะเมื่อฐานข้อมูลว่างเปล่า
- */
-export async function seedDemoData() {
-  console.log('🌱 Seeding demo data (Force)...');
-
-  const demoFarms = [
-    { id: 'farm_001', code: 'F01', name: 'ฟาร์มสมชาย 1', owner: 'สมชาย ใจดี', phone: '0810000001', village: 'ม.1', subdistrict: 'วังชิ้น', district: 'วังชิ้น', province: 'แพร่', lat: 18.1, lng: 100.2, active: true },
-    { id: 'farm_002', code: 'F02', name: 'ฟาร์มสมชาย 2', owner: 'สมชาย ใจดี', phone: '0810000001', village: 'ม.2', subdistrict: 'วังชิ้น', district: 'วังชิ้น', province: 'แพร่', lat: 18.2, lng: 100.3, active: true },
-    { id: 'farm_003', code: 'F03', name: 'ฟาร์มสมชาย 3', owner: 'สมชาย ใจดี', phone: '0810000001', village: 'ม.3', subdistrict: 'วังชิ้น', district: 'วังชิ้น', province: 'แพร่', lat: 18.3, lng: 100.4, active: true },
-    { id: 'farm_004', code: 'F04', name: 'ฟาร์มสมบูรณ์', owner: 'สมบูรณ์ มีสุข', phone: '0820000000', village: 'ม.1', subdistrict: 'วังชิ้น', district: 'วังชิ้น', province: 'แพร่', lat: 18.4, lng: 100.5, active: true },
-  ];
-
-  await db.farms.bulkPut(demoFarms);
-
-  const demoAnimals: Animal[] = [
-    { id: 'a1', rfid: '123', tagNo: 'S01-01', name: 'เบอร์ 1', sex: 'female', breed: 'โฮลสไตน์', bloodPct: 100, birthDate: Date.now() - 1000 * 60 * 60 * 24 * 365 * 2, farmId: 'farm_001', damId: null, sireCode: 'S-01', stage: 'pregnant', parity: 1, lastCalvingAt: null, lastHeatAt: null, lastBredAt: null, expectedCalvingAt: Date.now() + 1000 * 60 * 60 * 24 * 30, lastBcs: 3.2, feedGroupId: null, withdrawalUntil: null, active: true },
-    { id: 'a2', rfid: '456', tagNo: 'S02-01', name: 'เบอร์ 2', sex: 'female', breed: 'โฮลสไตน์', bloodPct: 100, birthDate: Date.now() - 1000 * 60 * 60 * 24 * 365 * 3, farmId: 'farm_002', damId: null, sireCode: 'S-01', stage: 'waiting', parity: 2, lastCalvingAt: Date.now() - 1000 * 60 * 60 * 24 * 60, lastHeatAt: Date.now() - 1000 * 60 * 60 * 24 * 5, lastBredAt: null, expectedCalvingAt: null, lastBcs: 3.0, feedGroupId: null, withdrawalUntil: null, active: true },
-    { id: 'a3', rfid: '789', tagNo: 'S03-01', name: 'เบอร์ 3', sex: 'female', breed: 'โฮลสไตน์', bloodPct: 100, birthDate: Date.now() - 1000 * 60 * 60 * 24 * 365 * 1, farmId: 'farm_003', damId: null, sireCode: 'S-01', stage: 'heifer', parity: 0, lastCalvingAt: null, lastHeatAt: null, lastBredAt: null, expectedCalvingAt: null, lastBcs: 2.8, feedGroupId: null, withdrawalUntil: null, active: true },
-  ];
-
-  await db.animals.bulkPut(demoAnimals);
-  console.log('✅ Demo data force-seeded successfully');
-}
-
 /** สร้าง id แบบเรียงตามเวลา อ่านง่ายเวลา debug และไม่ชนกันข้ามเครื่อง */
 export function newLocalId(prefix: string): string {
   const t = Date.now().toString(36)

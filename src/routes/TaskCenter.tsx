@@ -61,12 +61,12 @@ const localDate = (ts: number) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-export function TaskCenter() {
-  const { userId, role, isAdmin } = useAccount()
+export function TaskCenter({ initialTab = 'track' }: { initialTab?: 'track' | 'assign' }) {
+  const { userId, role, isAdmin, farmIds: accountFarmIds } = useAccount()
   const account = useAccount()
   const actor = { userId: account.userId, name: account.name, role: account.role }
 
-  const [activeTab, setActiveTab] = useState<'track' | 'assign'>('track')
+  const [activeTab, setActiveTab] = useState<'track' | 'assign'>(initialTab)
 
   // State สำหรับส่วนติดตามงาน (Tasks)
   const [bucket, setBucket] = useState<TaskBucket>('today')
@@ -90,7 +90,7 @@ export function TaskCenter() {
   useEffect(() => {
     let alive = true
     void (async () => {
-      const farmIds = role === 'farmer' ? ((await db.users.get(userId))?.farmIds ?? []) : undefined
+      const farmIds = role === 'farmer' ? (accountFarmIds ?? []) : undefined
       const [b, d] = await Promise.all([
         taskBuckets(role, farmIds, isAdmin, userId),
         db.tasks.where('status').equals('done').reverse().limit(200).toArray(),
@@ -98,11 +98,21 @@ export function TaskCenter() {
       if (!alive) return
       setTaskData(b)
       setDoneRows(
-        d.filter((k) => inPhase(k.activityCode)).sort((x, y) => (y.doneAt ?? 0) - (x.doneAt ?? 0)).slice(0, 50),
+        d
+          .filter((k) =>
+            inPhase(k.activityCode) &&
+            (role !== 'farmer' ||
+              (!!k.farmId &&
+                (accountFarmIds ?? []).includes(k.farmId) &&
+                k.assignedRole === role &&
+                (!k.assignedTo || k.assignedTo === userId))),
+          )
+          .sort((x, y) => (y.doneAt ?? 0) - (x.doneAt ?? 0))
+          .slice(0, 50),
       )
     })()
     return () => { alive = false }
-  }, [userId, role, isAdmin, bucket])
+  }, [userId, role, isAdmin, accountFarmIds, bucket])
 
   // --- Logic สำหรับมอบหมายงาน ---
   const loadAssign = useCallback(async () => {

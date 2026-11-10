@@ -24,8 +24,10 @@ import { estimate } from '../lib/storage'
 import { ACTIVITY_BY_CODE } from '../domain/activities'
 import { age, bytes, dateTime, duration, num } from '../lib/format'
 import type { ActivityRecord, OutboxItem } from '../domain/types'
+import { useAccount } from '../state/session'
 
 export function SyncCenter() {
+  const { userId } = useAccount()
   const [snap, setSnap] = useState<SyncSnapshot | null>(null)
   const [queue, setQueue] = useState<OutboxItem[]>([])
   const [conflicts, setConflicts] = useState<ActivityRecord[]>([])
@@ -38,7 +40,9 @@ export function SyncCenter() {
   const load = useCallback(async () => {
     const [s, q, c, p, e] = await Promise.all([
       syncSnapshot(),
-      db.outbox.orderBy('nextAttemptAt').limit(50).toArray(),
+      db.outbox.orderBy('nextAttemptAt').toArray().then((items) =>
+        items.filter((item) => item.ownerUserId === userId).slice(0, 50),
+      ),
       db.records.where('syncStatus').equals('conflict').limit(30).toArray(),
       getRetention(),
       estimate(),
@@ -48,7 +52,7 @@ export function SyncCenter() {
     setConflicts(c)
     setPolicy(p)
     setQuota({ quota: e.quota, usage: e.usage })
-  }, [])
+  }, [userId])
 
   useEffect(() => {
     void load()
@@ -104,6 +108,12 @@ export function SyncCenter() {
         {!snap.online && (
           <Note>
             <CloudOff size={14} className="ic-inline" /> ออฟไลน์อยู่ — บันทึกต่อได้ตามปกติ
+          </Note>
+        )}
+        {snap.blockedOutbox > 0 && (
+          <Note>
+            มีคิว {num(snap.blockedOutbox)} รายการที่ผูกกับบัญชีอื่นหรือเป็นคิวเก่าที่ยังไม่ระบุเจ้าของ
+            จึงพักไว้และจะไม่ส่งด้วยบัญชีนี้
           </Note>
         )}
 
@@ -207,6 +217,7 @@ export function SyncCenter() {
                   <tr key={q.localId}>
                     <td>
                       {q.op} · {q.table}
+                      {q.status === 'conflict' && <Pill tone="crit">ขัดแย้ง · พักส่ง</Pill>}
                     </td>
                     <td className="num">{bytes(q.bytes)}</td>
                     <td className="num">{q.attempts}</td>

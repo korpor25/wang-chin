@@ -27,7 +27,7 @@ const dayFull = (ts: number) =>
   new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
 
 export function Dashboard() {
-  const { userId, role, isAdmin } = useAccount()
+  const { userId, role, isAdmin, farmIds: accountFarmIds } = useAccount()
   const [buckets, setBuckets] = useState<Awaited<ReturnType<typeof taskBuckets>> | null>(null)
   const [heat, setHeat] = useState<{ inGolden: HeatWatchRow[]; expected: HeatWatchRow[] } | null>(null)
   const [herd, setHerd] = useState<{ total: number; nearCalving: number } | null>(null)
@@ -36,8 +36,8 @@ export function Dashboard() {
     let alive = true
     void (async () => {
       const params = await getParams()
-      // SEC-01 — เกษตรกรเห็นเฉพาะฟาร์มของบัญชีตัวเอง ไม่ใช่บัญชีตัวอย่างที่ผูกไว้ตายตัว
-      const farmIds = role === 'farmer' ? ((await db.users.get(userId))?.farmIds ?? []) : undefined
+      // SEC-01 — ใช้ขอบเขตฟาร์มจากบัญชีที่ยืนยันตัวตนแล้ว
+      const farmIds = role === 'farmer' ? (accountFarmIds ?? []) : undefined
       const [b, h, animals] = await Promise.all([
         taskBuckets(role, farmIds, isAdmin, userId),
         heatWatch(params, farmIds),
@@ -48,7 +48,7 @@ export function Dashboard() {
       setHeat(h)
 
       // ตัวเลขสรุปฝูงบนหัวหน้าแรก — เกษตรกรนับเฉพาะฟาร์มตัวเอง
-      const mine = farmIds?.length ? animals.filter((a) => farmIds.includes(a.farmId)) : animals
+      const mine = farmIds ? animals.filter((a) => farmIds.includes(a.farmId)) : animals
       const soon = Date.now() + 30 * 86_400_000
       setHerd({
         total: mine.filter((a) => a.active).length,
@@ -58,7 +58,7 @@ export function Dashboard() {
     return () => {
       alive = false
     }
-  }, [userId, role, isAdmin])
+  }, [userId, role, isAdmin, accountFarmIds])
 
   const steps = activitiesForRole(role)
   // ใบที่ระบบชี้ว่าควรทำก่อน = กิจกรรมของงานที่ใกล้ถึงกำหนดที่สุด
@@ -108,18 +108,21 @@ export function Dashboard() {
       )}
 
       {/* งานเร่งด่วน */}
-      {buckets && (buckets.overdue.length > 0 || buckets.today.length > 0) && (
+      {buckets && (
         <Card
           title="งานวันนี้"
           hint={`เลยกำหนด ${buckets.overdue.length} · ถึงกำหนดวันนี้ ${buckets.today.length}`}
           action={<Link to="/tasks" className="link-more">ดูทั้งหมด</Link>}
         >
-          <List>
-            {[...buckets.overdue.slice(0, 4), ...buckets.today.slice(0, 4)].map((k) => (
-              <TaskRow key={k.localId} task={k} />
-            ))}
-          </List>
-          {buckets.overdue.length + buckets.today.length === 0 && <Empty>ไม่มีงานค้างวันนี้</Empty>}
+          {buckets.overdue.length + buckets.today.length > 0 ? (
+            <List>
+              {[...buckets.overdue.slice(0, 4), ...buckets.today.slice(0, 4)].map((k) => (
+                <TaskRow key={k.localId} task={k} />
+              ))}
+            </List>
+          ) : (
+            <Empty>ไม่มีงานค้างหรือถึงกำหนดวันนี้</Empty>
+          )}
         </Card>
       )}
 

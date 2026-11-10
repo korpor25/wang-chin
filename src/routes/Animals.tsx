@@ -161,11 +161,10 @@ export function Animals() {
   useEffect(() => {
     void db.farms.toArray().then(setFarms)
     void (async () => {
-      if (role === 'farmer' && account?.farmIds?.length) {
-        const count = await db.animals
-          .where('farmId')
-          .anyOf(account.farmIds)
-          .count()
+      if (role === 'farmer') {
+        const count = account?.farmIds.length
+          ? await db.animals.where('farmId').anyOf(account.farmIds).count()
+          : 0
         setTotal(count)
       } else {
         const count = await db.animals.count()
@@ -176,7 +175,7 @@ export function Animals() {
   }, [role, account])
 
   useEffect(() => {
-    if (role === 'farmer' && account?.farmIds?.length) {
+    if (role === 'farmer') {
       setFarmId('all')
     }
   }, [role, account])
@@ -193,15 +192,12 @@ export function Animals() {
       q,
       stage,
       farmId: effectiveFarmId || undefined,
+      farmIds: role === 'farmer' ? (account?.farmIds ?? []) : undefined,
       parity: stage === 'heifer' && parity !== 'all' ? parity : undefined,
       limit: 120,
     }).then((r) => {
       if (alive) {
-        // ถ้าเป็นเกษตรกร ต้องมั่นใจว่าผลลัพธ์ที่ได้มาเป็นของฟาร์มตัวเองเท่านั้น
-        const filtered = role === 'farmer' && account?.farmIds
-          ? r.filter(a => account.farmIds.includes(a.farmId))
-          : r
-        setRows(filtered)
+        setRows(r)
       }
     })
     return () => {

@@ -11,7 +11,7 @@
  */
 import { bumpCounter, db, getSetting, newLocalId, setSetting } from './db'
 import type { ActivityRecord, OutboxItem, SyncStatus } from '../domain/types'
-import { authToken, forceSignOut } from '../state/session'
+import { forceSignOut, useSession } from '../state/session'
 
 const DAY = 86_400_000
 
@@ -47,6 +47,7 @@ export async function enqueue(
 ) {
   await db.outbox.add({
     localId: newLocalId('ob'),
+    ownerUserId: useSession.getState().account?.userId ?? null,
     table,
     op,
     refLocalId,
@@ -113,7 +114,7 @@ async function payloadFor(item: OutboxItem): Promise<unknown> {
  *   5xx / เครือข่ายล้ม = error แล้วเข้ารอบ backoff ตามปกติ
  * ถ้าไม่ตั้งค่าไว้ จะจำลองผลลัพธ์ตามสัดส่วนที่ใกล้เคียงงานภาคสนามเหมือนเดิม
  */
-async function pushOne(item: OutboxItem): Promise<'ok' | 'conflict' | 'error'> {
+async function pushOne(item: OutboxItem, token: string | null): Promise<'ok' | 'conflict' | 'error'> {
   if (!API_URL) {
     // หน่วงตามขนาดข้อมูลเล็กน้อย ให้ใกล้เคียงการส่งจริงบนเน็ตมือถือ
     await new Promise((r) => setTimeout(r, 60 + Math.min(400, item.bytes / 2000) + Math.random() * 120))
@@ -126,8 +127,6 @@ async function pushOne(item: OutboxItem): Promise<'ok' | 'conflict' | 'error'> {
   try {
     const body = await payloadFor(item)
     if (!body) return 'ok' // ของถูกลบไปแล้ว ไม่มีอะไรต้องส่ง
-    const token = authToken()
-
     // รูปส่งเป็น multipart — ไฟล์ไบนารีส่งผ่าน JSON ไม่ได้ (อัปขึ้น object storage ที่เซิร์ฟเวอร์)
     if (item.table === 'photos') {
       const photo = body as {
@@ -156,6 +155,7 @@ async function pushOne(item: OutboxItem): Promise<'ok' | 'conflict' | 'error'> {
         forceSignOut()
         return 'error'
       }
+      if (pres.status === 409) return 'conflict'
       return pres.ok ? 'ok' : 'error'
     }
 
@@ -196,6 +196,27 @@ async function pushOne(item: OutboxItem): Promise<'ok' | 'conflict' | 'error'> {
  *              เพราะคนกดคาดหวังว่าจะส่งตอนนี้ ไม่ใช่อีก 10 นาที
  */
 export async function runSync(limit = 50, force = false): Promise<SyncOutcome> {
+  return withSyncLock(() => performSync(limit, force))
+}
+
+let syncInFlight: Promise<SyncOutcome> | null = null
+
+function withSyncLock(operation: () => Promise<SyncOutcome>): Promise<SyncOutcome> {
+  if (syncInFlight) return syncInFlight
+  const run = operation()
+  syncInFlight = run
+  void run.then(
+    () => {
+      if (syncInFlight === run) syncInFlight = null
+    },
+    () => {
+      if (syncInFlight === run) syncInFlight = null
+    },
+  )
+  return run
+}
+
+async function performSync(limit: number, force: boolean): Promise<SyncOutcome> {
   const t0 = performance.now()
   const out: SyncOutcome = {
     attempted: 0, succeeded: 0, failed: 0, conflicts: 0,
@@ -208,26 +229,37 @@ export async function runSync(limit = 50, force = false): Promise<SyncOutcome> {
     return out
   }
 
+  const account = useSession.getState().account
+  const userId = account?.userId
+  if (!userId) {
+    out.ms = performance.now() - t0
+    return out
+  }
   const now = Date.now()
-  const due = force
-    ? await db.outbox.orderBy('id').limit(limit).toArray()
-    : await db.outbox.where('nextAttemptAt').belowOrEqual(now).limit(limit).toArray()
+  const due = (force
+    ? await db.outbox.orderBy('id').toArray()
+    : await db.outbox.where('nextAttemptAt').belowOrEqual(now).toArray())
+    .filter((item) => item.ownerUserId === userId && item.status !== 'conflict')
+    .slice(0, limit)
 
   for (const item of due) {
+    if (useSession.getState().account?.userId !== userId) break
     if (!navigator.onLine) {
       out.stoppedBecauseOffline = true
       break
     }
     out.attempted++
-    const result = await pushOne(item)
-
-    // ตัวนับรายการค้างนับเฉพาะบันทึกกิจกรรม งานและรูปใช้คิวร่วมกันแต่ไม่ได้นับที่ตัวเดียวกัน
     const isRecord = item.table === 'records'
+    const record = isRecord
+      ? await db.records.where('localId').equals(item.refLocalId).first()
+      : undefined
+    const result = await pushOne(item, account?.token || null)
 
     if (result === 'ok') {
       if (isRecord) {
         await markRecord(item.refLocalId, 'synced')
-        await bumpCounter('records.pending', -1)
+        if (record?.syncStatus === 'pending') await bumpCounter('records.pending', -1)
+        if (record?.syncStatus === 'failed') await bumpCounter('records.failed', -1)
       } else if (item.table === 'photos') {
         await markPhoto(item.refLocalId, 'synced')
       }
@@ -238,11 +270,18 @@ export async function runSync(limit = 50, force = false): Promise<SyncOutcome> {
     } else if (result === 'conflict') {
       if (isRecord) {
         await markRecord(item.refLocalId, 'conflict')
-        await bumpCounter('records.pending', -1)
+        if (record?.syncStatus === 'pending') await bumpCounter('records.pending', -1)
+        if (record?.syncStatus === 'failed') await bumpCounter('records.failed', -1)
         await bumpCounter('records.conflict', 1)
+        await db.outbox.delete(item.id!)
+        await bumpCounter('outbox.size', -1)
+      } else {
+        if (item.table === 'photos') await markPhoto(item.refLocalId, 'conflict')
+        await db.outbox.update(item.id!, {
+          status: 'conflict',
+          lastError: 'ข้อมูลขัดแย้งกับเซิร์ฟเวอร์ · คิวถูกพักไว้ ไม่ส่งซ้ำอัตโนมัติ',
+        })
       }
-      await db.outbox.delete(item.id!)
-      await bumpCounter('outbox.size', -1)
       out.conflicts++
     } else {
       const attempts = item.attempts + 1
@@ -253,8 +292,9 @@ export async function runSync(limit = 50, force = false): Promise<SyncOutcome> {
       })
       // ครบ 5 ครั้งถือว่าล้มเหลว ต้องให้คนเข้ามาดู — นับครั้งเดียวตอนข้ามเกณฑ์
       // ไม่งั้นทุกรอบถัดไปจะบวกตัวนับซ้ำจนยอด "ล้มเหลว" ในศูนย์ซิงค์เพี้ยน
-      if (attempts === 5 && isRecord) {
+      if (attempts >= 5 && isRecord && record?.syncStatus === 'pending') {
         await markRecord(item.refLocalId, 'failed')
+        await bumpCounter('records.pending', -1)
         await bumpCounter('records.failed', 1)
       }
       out.failed++
@@ -268,13 +308,17 @@ export async function runSync(limit = 50, force = false): Promise<SyncOutcome> {
 
 /** ส่งทั้งคิวเป็นชุด ๆ จนหมดหรือไม่มีความคืบหน้า — สำหรับปุ่ม "ส่งข้อมูล" */
 export async function runSyncAll(maxItems = 1000): Promise<SyncOutcome> {
+  return withSyncLock(() => performSyncAll(maxItems))
+}
+
+async function performSyncAll(maxItems: number): Promise<SyncOutcome> {
   const total: SyncOutcome = {
     attempted: 0, succeeded: 0, failed: 0, conflicts: 0,
     bytes: 0, ms: 0, stoppedBecauseOffline: false,
   }
   const seen = new Set<number>()
   while (total.attempted < maxItems) {
-    const out = await runSync(50, true)
+    const out = await performSync(50, true)
     total.attempted += out.attempted
     total.succeeded += out.succeeded
     total.failed += out.failed
@@ -284,7 +328,10 @@ export async function runSyncAll(maxItems = 1000): Promise<SyncOutcome> {
     total.stoppedBecauseOffline = out.stoppedBecauseOffline
     // หยุดเมื่อคิวหมด ขาดสัญญาณ หรือรอบนี้ไม่มีอะไรออกจากคิวเลย (ล้มทุกรายการ จะวนซ้ำไม่จบ)
     if (out.stoppedBecauseOffline || out.attempted === 0 || out.succeeded + out.conflicts === 0) break
-    const left = await db.outbox.count()
+    const userId = useSession.getState().account?.userId
+    const left = userId
+      ? await db.outbox.filter((item) => item.ownerUserId === userId && item.status !== 'conflict').count()
+      : 0
     if (left === 0 || seen.has(left)) break
     seen.add(left)
   }
@@ -377,27 +424,33 @@ export interface SyncSnapshot {
   failed: number
   conflict: number
   outbox: number
+  blockedOutbox: number
   oldestPendingAt: number | null
   lastSyncAt: number | null
   online: boolean
 }
 
 export async function syncSnapshot(): Promise<SyncSnapshot> {
-  const [pending, failed, conflict, outbox, oldest, lastSyncAt] = await Promise.all([
+  const userId = useSession.getState().account?.userId
+  const [pending, failed, recordConflict, items, lastSyncAt] = await Promise.all([
     db.counters.get('records.pending'),
     db.counters.get('records.failed'),
     db.counters.get('records.conflict'),
-    // นับจากคิวจริง ไม่ใช้ตัวนับ outbox.size — ตัวนับเคยเพี้ยนจนแถบบอกว่าส่งครบทั้งที่ยังมีของค้าง
-    // คิวมีแค่หลักสิบถึงหลักร้อยรายการ count() ทั้งตารางจึงเร็วพอ (ต่างจาก records ที่โตเป็นแสน)
-    db.outbox.count(),
-    db.outbox.orderBy('id').first(),
+    db.outbox.toArray(),
     getSetting<number | null>('lastSyncAt', null),
   ])
+  const owned = items.filter((item) => item.ownerUserId === userId && userId !== undefined)
+  const oldest = owned.filter((item) => item.status !== 'conflict').reduce<OutboxItem | undefined>(
+    (old, item) => (!old || item.createdAt < old.createdAt ? item : old),
+    undefined,
+  )
   return {
     pending: pending?.value ?? 0,
     failed: failed?.value ?? 0,
-    conflict: conflict?.value ?? 0,
-    outbox,
+    conflict: (recordConflict?.value ?? 0) +
+      owned.filter((item) => item.status === 'conflict').length,
+    outbox: owned.filter((item) => item.status !== 'conflict').length,
+    blockedOutbox: items.filter((item) => !userId || item.ownerUserId !== userId).length,
     oldestPendingAt: oldest?.createdAt ?? null,
     lastSyncAt,
     online: navigator.onLine,

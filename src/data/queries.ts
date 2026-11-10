@@ -50,7 +50,7 @@ export async function taskBuckets(
     rows = rows.filter((k) => k.assignedRole === role)
     if (userId) rows = rows.filter((k) => !k.assignedTo || k.assignedTo === userId)
   }
-  if (farmIds?.length) rows = rows.filter((k) => !k.farmId || farmIds.includes(k.farmId))
+  if (farmIds) rows = rows.filter((k) => !!k.farmId && farmIds.includes(k.farmId))
 
   const mine = (k: Task) => (userId && k.assignedTo === userId ? 0 : 1)
   rows.sort((a, b) => mine(a) - mine(b) || a.dueAt - b.dueAt)
@@ -83,7 +83,7 @@ export async function heatWatch(p: BioParams, farmIds?: string[]): Promise<{
 }> {
   const t = Date.now()
   let animals = await db.animals.where('stage').anyOf('waiting', 'fresh', 'bred').toArray()
-  if (farmIds?.length) animals = animals.filter((a) => farmIds.includes(a.farmId))
+  if (farmIds) animals = animals.filter((a) => farmIds.includes(a.farmId))
 
   const inGolden: HeatWatchRow[] = []
   const expected: HeatWatchRow[] = []
@@ -201,10 +201,12 @@ export async function searchAnimals(f: AnimalFilter): Promise<Animal[]> {
   let rows: Animal[] = []
 
   // บังคับกรองตามฟาร์มก่อนเสมอ ถ้ามีการระบุ farmId หรือ farmIds
-  if (f.farmId) {
-    rows = await db.animals.where('farmId').equals(f.farmId).toArray()
-  } else if (f.farmIds && f.farmIds.length > 0) {
+  if (f.farmIds !== undefined) {
+    if (f.farmIds.length === 0) return []
     rows = await db.animals.where('farmId').anyOf(f.farmIds).toArray()
+    if (f.farmId) rows = rows.filter((a) => a.farmId === f.farmId)
+  } else if (f.farmId) {
+    rows = await db.animals.where('farmId').equals(f.farmId).toArray()
   } else {
     // ถ้าไม่ระบุฟาร์มเลย (เช่น Admin ดูทั้งหมด) ให้ดึงทั้งหมดมาแล้วกรองต่อ
     rows = await db.animals.toArray()
@@ -243,7 +245,7 @@ const lastTouch = (a: Animal) =>
  * เคลื่อนไหวในวงรอบล่าสุดแทน จะได้ไม่ขึ้นรายการว่าง
  */
 export async function recentAnimals(limit = 6, farmIds?: string[]): Promise<Animal[]> {
-  const inScope = (a: Animal) => a.active && (!farmIds?.length || farmIds.includes(a.farmId))
+  const inScope = (a: Animal) => a.active && (!farmIds || farmIds.includes(a.farmId))
   const picked: Animal[] = []
   const seen = new Set<string>()
 

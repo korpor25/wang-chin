@@ -43,7 +43,7 @@ interface PendingPhoto {
 export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   const nav = useNavigate()
   const [sp] = useSearchParams()
-  const { userId, name, role, readOnly } = useAccount()
+  const { userId, name, role, readOnly, farmIds } = useAccount()
 
   const taskLocalId = sp.get('task')
   const presetAnimal = sp.get('animal')
@@ -96,8 +96,16 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
 
   useEffect(() => {
     if (!animalId) return setAnimal(null)
-    void db.animals.get(animalId).then((a) => setAnimal(a ?? null))
-  }, [animalId])
+    void db.animals.get(animalId).then((a) => {
+      if (a && role === 'farmer' && !(farmIds ?? []).includes(a.farmId)) {
+        setAnimal(null)
+        setAnimalId(null)
+        setErrors((current) => ({ ...current, __animal: 'ไม่มีสิทธิ์เข้าถึงโคตัวนี้ กรุณาเลือกโคในฟาร์มของคุณ' }))
+        return
+      }
+      setAnimal(a ?? null)
+    })
+  }, [animalId, farmIds, role])
 
   // คืนหน่วยความจำของ object URL เมื่อออกจากหน้า
   useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), [])
@@ -156,6 +164,9 @@ export function ActivityForm({ spec }: { spec: ActivitySpec }) {
   function validate(): boolean {
     const next: Record<string, string> = {}
     if (spec.needsAnimal && !animalId) next.__animal = 'ต้องเลือกตัวสัตว์ก่อน'
+    if (animalId && (!animal || (role === 'farmer' && !(farmIds ?? []).includes(animal.farmId)))) {
+      next.__animal = 'ไม่มีสิทธิ์เข้าถึงโคตัวนี้'
+    }
     for (const f of fields) {
       if (!f.required || f.hidden) continue
       const v = values[f.key]
@@ -669,24 +680,13 @@ function ErrorText({ msg }: { msg: string }) {
 }
 
 export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; open: boolean }) {
-  const { userId, role } = useAccount()
+  const { role, farmIds } = useAccount()
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<Animal[]>([])
   const [recent, setRecent] = useState<Animal[]>([])
   const [focused, setFocused] = useState(false)
   // เกษตรกรเลือกได้เฉพาะโคในฟาร์มตัวเอง
-  const [scope, setScope] = useState<string[]>(role === 'farmer' ? [] : [])
-
-  useEffect(() => {
-    if (role !== 'farmer') return
-    let alive = true
-    void db.users.get(userId).then((u) => {
-      if (alive) setScope(u?.farmIds ?? [])
-    })
-    return () => {
-      alive = false
-    }
-  }, [role, userId])
+  const scope = role === 'farmer' ? (farmIds ?? []) : undefined
 
   useEffect(() => {
     if (!open) return
@@ -694,8 +694,8 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
     void recentAnimals(4, scope).then((r) => {
       if (alive) {
         // กรองซ้ำอีกชั้นให้ชัวร์ว่าไม่มีวัวฟาร์มอื่นหลุดมา
-        const filtered = role === 'farmer' && scope.length > 0
-          ? r.filter(a => scope.includes(a.farmId))
+        const filtered = role === 'farmer'
+          ? r.filter(a => (farmIds ?? []).includes(a.farmId))
           : r
         setRecent(filtered)
       }
@@ -703,7 +703,7 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
     return () => {
       alive = false
     }
-  }, [open, scope])
+  }, [open, scope, role, farmIds])
 
   useEffect(() => {
     if (!open || q.trim() === '') return
@@ -711,8 +711,8 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
     void searchAnimals({ q, farmIds: scope, limit: 25 }).then((r) => {
       if (alive) {
         // กรองซ้ำอีกชั้นให้ชัวร์ว่าไม่มีวัวฟาร์มอื่นหลุดมา
-        const filtered = role === 'farmer' && scope.length > 0
-          ? r.filter(a => scope.includes(a.farmId))
+        const filtered = role === 'farmer'
+          ? r.filter(a => (farmIds ?? []).includes(a.farmId))
           : r
         setHits(filtered)
       }
@@ -720,7 +720,7 @@ export function AnimalPicker({ onPick, open }: { onPick: (a: Animal) => void; op
     return () => {
       alive = false
     }
-  }, [q, open, scope])
+  }, [q, open, scope, role, farmIds])
 
   const searching = q.trim() !== ''
   const rows = searching ? hits.slice(0, 6) : recent

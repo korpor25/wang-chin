@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from 'react'
 import { ChevronRight, LogIn } from 'lucide-react'
-import { DEMO_ACCOUNTS, useSession } from '../state/session'
+import { DEMO_ACCOUNTS, DEMO_LOGIN_ENABLED, useSession } from '../state/session'
 import { ROLE_LABEL } from '../domain/types'
 import { db } from '../data/db'
 import { computeKpis } from '../data/queries'
@@ -45,7 +45,7 @@ export function Login() {
   }
 
   // กดบัญชีเดโม = เติมค่าแล้วเข้าเลย
-  const useDemo = async (p: string, pw: string) => {
+  const signInDemo = async (p: string, pw: string) => {
     setPhone(p)
     setPassword(pw)
     await signIn(p, pw)
@@ -120,29 +120,33 @@ export function Login() {
           </button>
         </form>
 
-        <p className="hint" style={{ marginTop: 18 }}>
-          หรือเลือกบัญชีทดสอบ (รหัส 123456)
-        </p>
-        <ul className="login-list">
-          {DEMO_ACCOUNTS.map((a) => (
-            <li key={a.phone}>
-              <button onClick={() => useDemo(a.phone, a.password)} disabled={loading}>
-                <span className="avatar flush" aria-hidden="true">
-                  {INITIALS(a.name)}
-                </span>
-                <span className="who">
-                  <b>{a.name}</b>
-                  <span>
-                    {ROLE_LABEL[a.role]}
-                    {a.readOnly && ' · ดูอย่างเดียว'}
-                    {a.isAdmin && ' · ผู้ดูแลระบบ'} · {a.phone}
-                  </span>
-                </span>
-                <ChevronRight size={18} className="ic-faint" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        {DEMO_LOGIN_ENABLED && (
+          <>
+            <p className="hint" style={{ marginTop: 18 }}>
+              หรือเลือกบัญชีทดสอบ (รหัส 123456)
+            </p>
+            <ul className="login-list">
+              {DEMO_ACCOUNTS.map((a) => (
+                <li key={a.phone}>
+                  <button onClick={() => signInDemo(a.phone, a.password)} disabled={loading}>
+                    <span className="avatar flush" aria-hidden="true">
+                      {INITIALS(a.name)}
+                    </span>
+                    <span className="who">
+                      <b>{a.name}</b>
+                      <span>
+                        {ROLE_LABEL[a.role]}
+                        {a.readOnly && ' · ดูอย่างเดียว'}
+                        {a.isAdmin && ' · ผู้ดูแลระบบ'} · {a.phone}
+                      </span>
+                    </span>
+                    <ChevronRight size={18} className="ic-faint" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
 
       <p className="login-foot">

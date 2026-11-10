@@ -27,9 +27,10 @@ const dayShort = (ts: number) => new Date(ts).toLocaleDateString('th-TH', { day:
 
 export function AnimalDetail() {
   const { id = '' } = useParams()
-  const { role } = useAccount()
+  const { role, farmIds } = useAccount()
   const [tab, setTab] = useState<Tab>('overview')
   const [animal, setAnimal] = useState<Animal | null>(null)
+  const [access, setAccess] = useState<'loading' | 'allowed' | 'not-found' | 'forbidden'>('loading')
   const [farm, setFarm] = useState<Farm | null>(null)
   const [records, setRecords] = useState<ActivityRecord[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -37,9 +38,20 @@ export function AnimalDetail() {
 
   useEffect(() => {
     let alive = true
+    setAccess('loading')
+    setAnimal(null)
+    setParams(null)
     void (async () => {
       const a = await db.animals.get(id)
-      if (!alive || !a) return setAnimal(null)
+      if (!alive) return
+      if (!a) {
+        setAccess('not-found')
+        return
+      }
+      if (role === 'farmer' && !(farmIds ?? []).includes(a.farmId)) {
+        setAccess('forbidden')
+        return
+      }
       const [f, recs, tk, p] = await Promise.all([
         db.farms.get(a.farmId),
         animalTimeline(id),
@@ -52,17 +64,24 @@ export function AnimalDetail() {
       setRecords(recs)
       setTasks(tk.filter((k) => k.status === 'open' || k.status === 'overdue').sort((x, y) => x.dueAt - y.dueAt))
       setParams(p)
+      setAccess('allowed')
     })()
     return () => {
       alive = false
     }
-  }, [id])
+  }, [id, role, farmIds])
 
-  if (!animal || !params)
+  if (access !== 'allowed' || !animal || !params)
     return (
       <>
         <PageHeader title="ข้อมูลโค" />
-        {!animal && params ? <Empty>ไม่พบข้อมูลโคตัวนี้</Empty> : <Skeleton rows={4} />}
+        {access === 'not-found' ? (
+          <Empty>ไม่พบข้อมูลโคตัวนี้</Empty>
+        ) : access === 'forbidden' ? (
+          <Empty>บัญชีของคุณไม่มีสิทธิ์ดูข้อมูลโคตัวนี้</Empty>
+        ) : (
+          <Skeleton rows={4} />
+        )}
       </>
     )
 
