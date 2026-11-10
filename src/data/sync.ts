@@ -411,6 +411,61 @@ export async function discardLegacyOutbox(): Promise<number> {
   })
 }
 
+/** สร้างคิวใหม่ให้บันทึกที่ล้มเหลว โดยคิวเก่าที่ไม่มีเจ้าของยังต้องให้ผู้ใช้เลือกบัญชีเอง */
+export async function retryFailedRecords(): Promise<number> {
+  return db.transaction('rw', db.records, db.outbox, db.counters, async () => {
+    const records = await db.records.where('syncStatus').equals('failed').toArray()
+    const userId = useSession.getState().account?.userId
+    let retried = 0
+    let newQueueItems = 0
+
+    for (const record of records) {
+      const existing = await db.outbox
+        .where('refLocalId')
+        .equals(record.localId)
+        .filter((item) => item.table === 'records')
+        .first()
+
+      if (existing) {
+        if (
+          existing.ownerUserId !== undefined &&
+          existing.ownerUserId !== userId
+        ) continue
+        await db.outbox.update(existing.id!, {
+          status: undefined,
+          attempts: 0,
+          nextAttemptAt: Date.now(),
+          lastError: null,
+        })
+      } else {
+        const item: Omit<OutboxItem, 'id'> = {
+          localId: newLocalId('ob'),
+          table: 'records',
+          op: record.serverId ? 'update' : 'create',
+          refLocalId: record.localId,
+          bytes: roughBytes(record),
+          attempts: 0,
+          nextAttemptAt: Date.now(),
+          lastError: null,
+          createdAt: Date.now(),
+        }
+        await db.outbox.add(item)
+        newQueueItems++
+      }
+
+      await db.records.update(record.id!, { syncStatus: 'pending', lastModified: Date.now() })
+      retried++
+    }
+
+    if (retried > 0) {
+      await updateCounter('records.failed', -retried)
+      await updateCounter('records.pending', retried)
+    }
+    if (newQueueItems > 0) await updateCounter('outbox.size', newQueueItems)
+    return retried
+  })
+}
+
 /** แก้คิวขัดแย้งที่ไม่ใช่บันทึกกิจกรรม (เช่น งาน/รูป) โดยไม่ทิ้งข้อมูลในเครื่อง */
 export async function resolveQueueConflict(
   outboxId: number,

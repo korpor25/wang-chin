@@ -8,6 +8,7 @@ import {
   discardLegacyOutbox,
   enqueue,
   resolveQueueConflict,
+  retryFailedRecords,
   runSync,
 } from '../src/data/sync.ts'
 import { useSession } from '../src/state/session.ts'
@@ -171,4 +172,70 @@ test('discarding legacy queue preserves local records and marks them unsynced', 
   assert.equal((await db.records.where('localId').equals('legacy-record').first())?.syncStatus, 'failed')
   assert.equal((await db.counters.get('records.pending'))?.value, 0)
   assert.equal((await db.counters.get('records.failed'))?.value, 1)
+})
+
+test('retrying failed orphan records recreates an ownerless queue without duplicating existing queues', async () => {
+  const at = Date.now()
+  await db.records.bulkAdd([
+    {
+      localId: 'orphan-failed',
+      serverId: null,
+      activityCode: 'ก-01',
+      animalId: null,
+      farmId: null,
+      occurredAt: at,
+      payload: {},
+      photoIds: [],
+      note: '',
+      recordedBy: 'ผู้ใช้เดิม',
+      recordedRole: 'coop',
+      lastModified: at,
+      syncStatus: 'failed',
+      retries: 0,
+    },
+    {
+      localId: 'queued-failed',
+      serverId: null,
+      activityCode: 'ก-01',
+      animalId: null,
+      farmId: null,
+      occurredAt: at,
+      payload: {},
+      photoIds: [],
+      note: '',
+      recordedBy: 'ผู้ใช้เดิม',
+      recordedRole: 'coop',
+      lastModified: at,
+      syncStatus: 'failed',
+      retries: 0,
+    },
+  ])
+  await db.outbox.add({
+    localId: 'existing-owner-queue',
+    ownerUserId: 'user-b',
+    table: 'records',
+    op: 'create',
+    refLocalId: 'queued-failed',
+    bytes: 10,
+    attempts: 5,
+    nextAttemptAt: at,
+    lastError: 'failed',
+    createdAt: at,
+  })
+  await db.counters.bulkPut([
+    { key: 'outbox.size', value: 1 },
+    { key: 'records.pending', value: 0 },
+    { key: 'records.failed', value: 2 },
+  ])
+
+  assert.equal(await retryFailedRecords(), 1)
+  const queues = await db.outbox.toArray()
+  assert.equal(queues.length, 2)
+  assert.equal(queues.find((item) => item.refLocalId === 'orphan-failed')?.ownerUserId, undefined)
+  assert.equal(queues.find((item) => item.refLocalId === 'queued-failed')?.ownerUserId, 'user-b')
+  assert.equal((await db.records.where('localId').equals('orphan-failed').first())?.syncStatus, 'pending')
+  assert.equal((await db.records.where('localId').equals('queued-failed').first())?.syncStatus, 'failed')
+  assert.equal((await db.counters.get('records.pending'))?.value, 1)
+  assert.equal((await db.counters.get('records.failed'))?.value, 1)
+  assert.equal((await db.counters.get('outbox.size'))?.value, 2)
 })

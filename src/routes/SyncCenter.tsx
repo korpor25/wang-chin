@@ -18,6 +18,7 @@ import {
   pruneOldData,
   resolveConflict,
   resolveQueueConflict,
+  retryFailedRecords,
   runSync,
   setRetention,
   syncSnapshot,
@@ -86,6 +87,25 @@ export function SyncCenter() {
     await rebuildCounters()
     await load()
     setBusy(false)
+  }
+
+  async function retryOrphanedRecords() {
+    if (busy) return
+    setBusy(true)
+    setActionError(null)
+    try {
+      const retried = await retryFailedRecords()
+      if (retried > 0) {
+        toast.info(`นำบันทึก ${num(retried)} รายการกลับเข้าคิวแล้ว · เลือกผูกคิวเก่ากับบัญชีก่อนส่ง`)
+      } else {
+        toast.info('ไม่มีบันทึกล้มเหลวที่ขาดคิวส่ง')
+      }
+      await load()
+    } catch (error) {
+      setActionError(`นำบันทึกกลับเข้าคิวไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function manageLegacyQueue(action: 'claim' | 'discard') {
@@ -196,6 +216,19 @@ export function SyncCenter() {
               </div>
             </div>
           </div>
+        )}
+        {snap.failed > 0 && (
+          <Note>
+            มีบันทึกที่ส่งไม่สำเร็จ {num(snap.failed)} รายการ
+            <button
+              className="btn ghost"
+              disabled={busy}
+              onClick={() => void retryOrphanedRecords()}
+              style={{ marginInlineStart: 10 }}
+            >
+              นำกลับเข้าคิวส่ง
+            </button>
+          </Note>
         )}
 
         {/* OFF-07 — เตือนสองเกณฑ์: ค้างมากเกินไป และค้างนานเกินไป */}

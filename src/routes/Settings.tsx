@@ -51,7 +51,12 @@ export function Settings() {
   const [saved, setSaved] = useState(false)
   const [audit, setAudit] = useState<AuditEntry[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
-  const [resetPending, setResetPending] = useState<{ queued: number; records: number } | null>(null)
+  const [resetPending, setResetPending] = useState<{
+    queued: number
+    pending: number
+    failed: number
+    conflict: number
+  } | null>(null)
   const [resetError, setResetError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -60,14 +65,16 @@ export function Settings() {
     void db.audit.orderBy('at').reverse().limit(50).toArray().then(setAudit)
     void (async () => {
       setResetPending(null)
-      const [farms, animals, records, tasks, alerts, photos, queued, pendingRecords] = await Promise.all([
+      const [farms, animals, records, tasks, alerts, photos, queued, pending, failed, conflict] = await Promise.all([
         db.farms.count(), db.animals.count(), db.records.count(),
         db.tasks.count(), db.alerts.count(), db.photos.count(),
         db.outbox.count(),
-        db.records.where('syncStatus').anyOf('pending', 'failed', 'conflict').count(),
+        db.records.where('syncStatus').anyOf('pending', 'syncing').count(),
+        db.records.where('syncStatus').equals('failed').count(),
+        db.records.where('syncStatus').equals('conflict').count(),
       ])
       setCounts({ farms, animals, records, tasks, alerts, photos })
-      setResetPending({ queued, records: pendingRecords })
+      setResetPending({ queued, pending, failed, conflict })
     })()
     void isPersisted().then(setPersisted)
     void estimate().then(setSpace)
@@ -94,13 +101,18 @@ export function Settings() {
     setBusy(true)
     setResetError(null)
     try {
-      const [queued, records] = await Promise.all([
+      const [queued, pending, failed, conflict] = await Promise.all([
         db.outbox.count(),
-        db.records.where('syncStatus').anyOf('pending', 'failed', 'conflict').count(),
+        db.records.where('syncStatus').anyOf('pending', 'syncing').count(),
+        db.records.where('syncStatus').equals('failed').count(),
+        db.records.where('syncStatus').equals('conflict').count(),
       ])
-      setResetPending({ queued, records })
-      if (queued + records > 0) return
-      if (!window.confirm('ต้องการรีเซ็ตข้อมูลในเครื่องหรือไม่?')) return
+      setResetPending({ queued, pending, failed, conflict })
+      if (queued + pending + conflict > 0) return
+      const warning = failed > 0
+        ? `มีบันทึกที่ล้มเหลว ${num(failed)} รายการ ซึ่งจะถูกลบและกู้คืนไม่ได้\n\n`
+        : ''
+      if (!window.confirm(`${warning}ต้องการรีเซ็ตข้อมูลในเครื่องหรือไม่?`)) return
       await seedIfEmpty(true)
       location.reload()
     } catch (error) {
@@ -204,16 +216,26 @@ export function Settings() {
           <div className="row">
             <button
               className="btn ghost"
-              disabled={busy || resetPending === null || resetPending.queued + resetPending.records > 0}
+              disabled={
+                busy ||
+                resetPending === null ||
+                resetPending.queued + resetPending.pending + resetPending.conflict > 0
+              }
               onClick={() => void resetLocalData()}
             >
               รีเซ็ตข้อมูลในเครื่อง
             </button>
           </div>
-          {resetPending && resetPending.queued + resetPending.records > 0 ? (
+          {resetPending && resetPending.queued + resetPending.pending + resetPending.conflict > 0 ? (
             <Note>
               ส่งหรือแก้ไขข้อมูลที่ค้างก่อนจึงจะรีเซ็ตได้ · คิว {num(resetPending.queued)} รายการ /
-              บันทึกที่รอส่ง ล้มเหลว หรือขัดแย้ง {num(resetPending.records)} รายการ
+              บันทึกที่รอส่งหรือกำลังส่ง {num(resetPending.pending)} รายการ /
+              ขัดแย้ง {num(resetPending.conflict)} รายการ
+            </Note>
+          ) : resetPending && resetPending.failed > 0 ? (
+            <Note>
+              ยังรีเซ็ตได้ แต่บันทึกที่ล้มเหลว {num(resetPending.failed)} รายการจะถูกลบถาวร
+              หากต้องการเก็บไว้ ให้ลองส่งใหม่จากศูนย์ซิงค์ก่อน
             </Note>
           ) : (
             <Note>ลบข้อมูลทั้งหมดบนเครื่องนี้ รวมบันทึกที่ซิงค์แล้ว</Note>

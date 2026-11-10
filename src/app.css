@@ -984,7 +984,7 @@ table.data td.wrap {
 
 .login-list {
   list-style: none;
-  margin: var(--sp-4) calc(var(--sp-5) * -1) calc(var(--sp-5) * -1);
+  margin: var(--sp-4) calc(var(--sp-6) * -1) calc(var(--sp-6) * -1);
   padding: 0;
   background: transparent;
   border: 0;
@@ -1001,7 +1001,7 @@ table.data td.wrap {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-4) var(--sp-6);
   background: none;
   border: 0;
   cursor: pointer;
@@ -2168,86 +2168,53 @@ table.data td.wrap {
   color: var(--info);
 }
 
-/* ── การ์ดเข้ม ใช้กับหัวหน้าเข้าสู่ระบบและประกาศเด่นของสหกรณ์ ── */
-.slab {
-  background: var(--brand-2);
-  color: #fff;
-  border-radius: var(--r-lg);
-  padding: var(--sp-6);
-  margin-top: var(--sp-4);
+/* ── การ์ดเข้าสู่ระบบ: ภาพฟาร์มกับฟอร์มคนละเลเยอร์ ── */
+.login-card {
+  overflow: hidden;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-xl);
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(16, 38, 26, 0.08), 0 18px 38px -20px rgba(16, 38, 26, 0.32);
 }
 
-.slab h1,
-.slab h2 {
-  color: #fff;
+.login-hero {
+  position: relative;
+  padding-bottom: var(--sp-7);
 }
 
-.slab h1 {
-  font-size: var(--fs-2xl);
-  font-weight: var(--fw-black);
-}
-
-.slab p {
-  font-size: var(--fs-sm);
-  color: rgba(255, 255, 255, 0.82);
-  margin-top: var(--sp-2);
-}
-
-.slab-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  padding: 3px var(--sp-3);
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: var(--fs-xxs);
-  font-weight: var(--fw-medium);
-  margin-bottom: var(--sp-3);
-}
-
-.slab-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--sp-3);
-  margin-top: var(--sp-5);
-}
-
-.slab-stat b {
+.login-hero-image {
   display: block;
-  font-family: var(--mono);
-  font-size: var(--fs-xl);
-  font-weight: var(--fw-black);
-  color: #fff;
-}
-
-.slab-stat span {
-  font-size: var(--fs-xxs);
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.slab .btn {
-  background: #fff;
-  border-color: #fff;
-  color: var(--brand-2);
-  margin-top: var(--sp-4);
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-xl);
+  box-shadow: var(--s2);
 }
 
 /* หน้าเข้าสู่ระบบใช้พื้นที่เต็มจอ ไม่มีแถบเมนู */
 .login {
-  justify-content: flex-start;
+  justify-content: center;
   padding-top: calc(var(--sp-7) + env(safe-area-inset-top));
 }
 
-.login-chip {
-  display: inline-flex;
-  padding: 3px var(--sp-3);
-  border-radius: var(--r-pill);
-  background: var(--brand-soft);
-  color: var(--brand-2);
-  font-size: var(--fs-xxs);
-  font-weight: var(--fw-medium);
-  margin-bottom: var(--sp-3);
+.login-card-body {
+  position: relative;
+  z-index: 1;
+  margin-top: calc(var(--sp-7) * -2);
+  padding: var(--sp-6);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: var(--card);
+  box-shadow: 0 -4px 10px rgba(16, 38, 26, 0.2), 0 -16px 30px rgba(16, 38, 26, 0.32);
+}
+
+.login-card-body h2 {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+}
+
+@media (max-width: 420px) {
+  .login-card-body {
+    padding: var(--sp-5);
+  }
 }
 
 /* ── การ์ดที่เลือกได้ ใช้ในหน้ามอบหมายงานของเจ้าหน้าที่สหกรณ์ ──
